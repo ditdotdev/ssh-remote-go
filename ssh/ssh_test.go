@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"github.com/titan-data/remote-sdk-go/remote"
+	"github.com/datadatdat/remote-sdk-go/remote"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 	"io/ioutil"
