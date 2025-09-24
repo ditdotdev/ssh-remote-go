@@ -1,5 +1,7 @@
 # Titan SSH Provider
 
+<!-- Test comment to verify updated GitHub Actions workflow - September 24, 2025 -->
+
 This is a basic Titan SSH provider. For more information on how it works,
 consult the titan documentation.
 
