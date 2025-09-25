@@ -6,8 +6,8 @@ package ssh
 import (
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"github.com/datadatdat/remote-sdk-go/remote"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 	"io/ioutil"
