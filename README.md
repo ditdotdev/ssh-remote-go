@@ -3,6 +3,14 @@
 This is a basic Titan SSH provider. For more information on how it works,
 consult the titan documentation.
 
+## CI/CD Pipeline
+
+This repository includes a comprehensive Pull Request 2 workflow with:
+- Cross-platform testing (Ubuntu, Windows, macOS)
+- Multi-version Go support (1.21, 1.22, 1.23)
+- Security scanning and code quality checks
+- Coverage reporting and performance benchmarks
+
 ## Contributing
 
 This project follows the Titan community best practices:
