@@ -1,36 +1,31 @@
 # golangci-lint configuration for ssh-remote-go
-# More info: https://github.com/golangci/golangci-lint#config-file
+# Configuration for golangci-lint v2.5.0+
+version: 2
 
 run:
   timeout: 5m
   modules-download-mode: readonly
-  go: '1.22'
+  go: '1.24'
 
 output:
-  formats:
-    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
+  format: colored-line-number
 
 linters:
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
-    - gofmt
-    - goimports
     - gosec
     - misspell
     - revive
     - gocyclo
     - goconst
-    - gofumpt
     - whitespace
-    - wsl
+    - wsl_v5
     - predeclared
     - nolintlint
     - copyloopvar
