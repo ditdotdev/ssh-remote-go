@@ -1,6 +1,8 @@
 /*
  * Copyright The Titan Project Contributors.
  */
+
+// Package ssh provides SSH remote backend functionality for Titan data storage.
 package ssh
 
 import (
@@ -10,9 +12,9 @@ import (
 	"fmt"
 	"github.com/datadatdat/remote-sdk-go/remote"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/terminal"
-	"io/ioutil"
+	"golang.org/x/term"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -24,8 +26,8 @@ func (s sshRemote) Type() (string, error) {
 	return "ssh", nil
 }
 
-func (s sshRemote) FromURL(rawUrl string, additionalProperties map[string]string) (map[string]interface{}, error) {
-	url, err := url.Parse(rawUrl)
+func (s sshRemote) FromURL(rawURL string, additionalProperties map[string]string) (map[string]interface{}, error) {
+	url, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +54,7 @@ func (s sshRemote) FromURL(rawUrl string, additionalProperties map[string]string
 	}
 
 	keyFile := additionalProperties["keyFile"]
+
 	password, passwordSet := url.User.Password()
 	if keyFile != "" && passwordSet {
 		return nil, errors.New("both remote password and key file cannot be specified")
@@ -72,13 +75,16 @@ func (s sshRemote) FromURL(rawUrl string, additionalProperties map[string]string
 	if password != "" {
 		result["password"] = password
 	}
+
 	if url.Port() != "" {
 		port, err := strconv.Atoi(url.Port())
 		if err != nil {
 			return nil, fmt.Errorf("invalid port '%s': %w", url.Port(), err)
 		}
+
 		result["port"] = port
 	}
+
 	if keyFile != "" {
 		result["keyFile"] = keyFile
 	}
@@ -88,18 +94,23 @@ func (s sshRemote) FromURL(rawUrl string, additionalProperties map[string]string
 
 func getPort(port interface{}) (int, error) {
 	portval := 0
+
 	if p, ok := port.(int); ok {
 		portval = p
 	}
+
 	if p, ok := port.(float32); ok {
 		portval = int(p)
 	}
+
 	if p, ok := port.(float64); ok {
 		portval = int(p)
 	}
+
 	if portval <= 0 || portval > 65535 {
 		return 0, errors.New("invalid port")
 	}
+
 	return portval, nil
 }
 
@@ -108,17 +119,21 @@ func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]
 	if properties["password"] != nil {
 		u += ":*****"
 	}
+
 	u += fmt.Sprintf("@%s", properties["address"])
 	if port, ok := properties["port"]; ok {
 		portval, err := getPort(port)
 		if err != nil {
 			return "", nil, err
 		}
+
 		u += fmt.Sprintf(":%d", portval)
 	}
+
 	if properties["path"].(string)[0:1] != "/" {
 		u += "/~/"
 	}
+
 	u += properties["path"].(string)
 
 	retProps := map[string]string{}
@@ -129,26 +144,29 @@ func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]
 	return u, retProps, nil
 }
 
-var readPassword = terminal.ReadPassword
+var readPassword = term.ReadPassword
 var fmtPrintf = fmt.Printf
 
 func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
 	if remoteProperties["keyFile"] != nil {
-		content, err := ioutil.ReadFile(remoteProperties["keyFile"].(string))
+		content, err := os.ReadFile(remoteProperties["keyFile"].(string))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read key file %s: %w", remoteProperties["keyFile"], err)
 		}
+
 		result["key"] = string(content)
 	}
 
 	if remoteProperties["password"] == nil && remoteProperties["keyFile"] == nil {
-		fmtPrintf("password: ")
+		_, _ = fmtPrintf("password: ")
+
 		pw, err := readPassword(0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read password: %w", err)
 		}
+
 		result["password"] = string(pw)
 	}
 
@@ -160,10 +178,12 @@ func (s sshRemote) ValidateRemote(properties map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	if port, ok := properties["port"]; ok {
 		_, err := getPort(port)
 		return err
 	}
+
 	return nil
 }
 
@@ -180,18 +200,23 @@ func getAuth(properties map[string]interface{}, parameters map[string]interface{
 	paramsPassword, paramsPasswordOk := parameters["password"]
 	paramsKey, paramsKeyOk := parameters["key"]
 	remotePassword, remotePasswordOk := properties["password"]
+
 	if paramsPasswordOk && paramsKeyOk {
 		return "", "", errors.New("only one of password or key can be specified")
 	}
+
 	if paramsKeyOk {
 		return "", paramsKey.(string), nil
 	}
+
 	if paramsPasswordOk {
 		return paramsPassword.(string), "", nil
 	}
+
 	if remotePasswordOk {
 		return remotePassword.(string), "", nil
 	}
+
 	return "", "", errors.New("one of password or key must be specified")
 }
 
@@ -202,9 +227,10 @@ func getConnection(properties map[string]interface{}, parameters map[string]inte
 	if err != nil {
 		return nil, err
 	}
+
 	config := &ssh.ClientConfig{
 		User:            properties["username"].(string),
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // Intentional for testing
 	}
 
 	if key != "" {
@@ -212,6 +238,7 @@ func getConnection(properties map[string]interface{}, parameters map[string]inte
 		if err != nil {
 			return nil, err
 		}
+
 		config.Auth = []ssh.AuthMethod{ssh.PublicKeys(parsed)}
 	} else {
 		config.Auth = []ssh.AuthMethod{ssh.Password(password)}
@@ -225,30 +252,33 @@ func runCommand(conn *ssh.Client, command string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer sess.Close()
+
+	defer func() { _ = sess.Close() }()
 
 	output, err := sess.CombinedOutput(command)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute '%s': %w\n%s", command, err, string(output))
 	}
+
 	return output, nil
 }
 
 var run = runCommand
 
-func readCommit(conn *ssh.Client, properties map[string]interface{}, commitId string) (*remote.Commit, error) {
-	output, err := run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties["path"], commitId))
+func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID string) (*remote.Commit, error) {
+	output, err := run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties["path"], commitID))
 	if err != nil {
 		return nil, err
 	}
 
 	commit := map[string]interface{}{}
+
 	err = json.Unmarshal(output, &commit)
 	if err != nil {
 		return nil, err
 	}
 
-	return &remote.Commit{Id: commitId, Properties: commit}, nil
+	return &remote.Commit{Id: commitID, Properties: commit}, nil
 }
 
 func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map[string]interface{}, tags []remote.Tag) ([]remote.Commit, error) {
@@ -256,7 +286,8 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+
+	defer func() { _ = conn.Close() }()
 
 	output, err := run(conn, fmt.Sprintf("ls -1 \"%s\"", properties["path"]))
 	if err != nil {
@@ -264,10 +295,12 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 	}
 
 	var ret []remote.Commit
+
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
-		commitId := strings.TrimSpace(scanner.Text())
-		commit, err := readCommit(conn, properties, commitId)
+		commitID := strings.TrimSpace(scanner.Text())
+
+		commit, err := readCommit(conn, properties, commitID)
 		if err == nil && remote.MatchTags(commit.Properties, tags) {
 			ret = append(ret, remote.Commit{Id: commit.Id, Properties: commit.Properties})
 		}
@@ -278,14 +311,15 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 	return ret, nil
 }
 
-func (s sshRemote) GetCommit(properties map[string]interface{}, parameters map[string]interface{}, commitId string) (*remote.Commit, error) {
+func (s sshRemote) GetCommit(properties map[string]interface{}, parameters map[string]interface{}, commitID string) (*remote.Commit, error) {
 	conn, err := getConnection(properties, parameters)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
 
-	return readCommit(conn, properties, commitId)
+	defer func() { _ = conn.Close() }()
+
+	return readCommit(conn, properties, commitID)
 }
 
 func init() {
