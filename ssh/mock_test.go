@@ -48,17 +48,17 @@ func (m *MockConn) SendRequest(name string, wantReply bool, payload []byte) (boo
 	return args.Bool(0), args.Get(1).([]byte), args.Error(2)
 }
 
-func (m MockConn) OpenChannel(name string, data []byte) (ssh.Channel, <-chan *ssh.Request, error) {
+func (m *MockConn) OpenChannel(name string, data []byte) (ssh.Channel, <-chan *ssh.Request, error) {
 	args := m.Called(name, data)
 	return args.Get(0).(ssh.Channel), args.Get(1).(<-chan *ssh.Request), args.Error(2)
 }
 
-func (m MockConn) Close() error {
+func (m *MockConn) Close() error {
 	args := m.Called()
 	return args.Error(0)
 }
 
-func (m MockConn) Wait() error {
+func (m *MockConn) Wait() error {
 	args := m.Called()
 	return args.Error(0)
 }
