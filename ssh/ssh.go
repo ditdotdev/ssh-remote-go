@@ -59,7 +59,7 @@ func (s sshRemote) FromURL(rawUrl string, additionalProperties map[string]string
 
 	for k := range additionalProperties {
 		if k != "keyFile" {
-			return nil, errors.New(fmt.Sprintf("invalid rmeote property '%s'", k))
+			return nil, fmt.Errorf("invalid rmeote property '%s'", k)
 		}
 	}
 
