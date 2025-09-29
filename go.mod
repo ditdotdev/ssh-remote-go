@@ -14,7 +14,6 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/oklog/run v1.1.0 // indirect
@@ -33,8 +32,3 @@ require (
 go 1.24
 
 toolchain go1.24.5
-
-replace (
-	github.com/datadatdat/remote-sdk-go v0.2.1 => ../remote-sdk-go
-	github.com/datadatdat/remote-sdk-go v0.2.4 => ../remote-sdk-go
-)
