@@ -6,11 +6,10 @@ package ssh
 import (
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"github.com/datadatdat/remote-sdk-go/remote"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/terminal"
-	"io/ioutil"
+	"golang.org/x/term"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,6 +17,7 @@ import (
 
 func TestRegistered(t *testing.T) {
 	r := remote.Get("ssh")
+
 	ret, err := r.Type()
 	if assert.NoError(t, err) {
 		assert.Equal(t, "ssh", ret)
@@ -26,6 +26,7 @@ func TestRegistered(t *testing.T) {
 
 func TestFromURL(t *testing.T) {
 	r := remote.Get("ssh")
+
 	props, err := r.FromURL("ssh://user:pass@host:8022/path", map[string]string{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "user", props["username"])
@@ -39,6 +40,7 @@ func TestFromURL(t *testing.T) {
 
 func TestSimple(t *testing.T) {
 	r := remote.Get("ssh")
+
 	props, err := r.FromURL("ssh://user@host/path", map[string]string{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "user", props["username"])
@@ -52,6 +54,7 @@ func TestSimple(t *testing.T) {
 
 func TestKeyFile(t *testing.T) {
 	r := remote.Get("ssh")
+
 	props, err := r.FromURL("ssh://user@host/path", map[string]string{"keyFile": "~/.ssh/id_dsa"})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "~/.ssh/id_dsa", props["keyFile"])
@@ -60,6 +63,7 @@ func TestKeyFile(t *testing.T) {
 
 func TestRelativePath(t *testing.T) {
 	r := remote.Get("ssh")
+
 	props, err := r.FromURL("ssh://user@host/~/relative/path", map[string]string{})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "relative/path", props["path"])
@@ -128,6 +132,7 @@ func TestBadMissingHostWithUser(t *testing.T) {
 
 func TestToURL(t *testing.T) {
 	r := remote.Get("ssh")
+
 	u, props, err := r.ToURL(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path"})
 	if assert.NoError(t, err) {
@@ -138,6 +143,7 @@ func TestToURL(t *testing.T) {
 
 func TestToPassword(t *testing.T) {
 	r := remote.Get("ssh")
+
 	u, props, err := r.ToURL(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path", "password": "pass"})
 	if assert.NoError(t, err) {
@@ -148,6 +154,7 @@ func TestToPassword(t *testing.T) {
 
 func TestToPort(t *testing.T) {
 	r := remote.Get("ssh")
+
 	u, props, err := r.ToURL(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path", "port": 812})
 	if assert.NoError(t, err) {
@@ -165,6 +172,7 @@ func TestToBadPort(t *testing.T) {
 
 func TestToRelativePath(t *testing.T) {
 	r := remote.Get("ssh")
+
 	u, props, err := r.ToURL(map[string]interface{}{"username": "username", "address": "host",
 		"path": "path"})
 	if assert.NoError(t, err) {
@@ -175,6 +183,7 @@ func TestToRelativePath(t *testing.T) {
 
 func TestToKeyFile(t *testing.T) {
 	r := remote.Get("ssh")
+
 	u, props, err := r.ToURL(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path", "keyFile": "keyfile"})
 	if assert.NoError(t, err) {
@@ -187,6 +196,7 @@ func TestToKeyFile(t *testing.T) {
 func TestToPortFloat(t *testing.T) {
 	p := float32(812)
 	r := remote.Get("ssh")
+
 	u, props, err := r.ToURL(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path", "port": p})
 	if assert.NoError(t, err) {
@@ -197,6 +207,7 @@ func TestToPortFloat(t *testing.T) {
 
 func TestToPortDouble(t *testing.T) {
 	r := remote.Get("ssh")
+
 	u, props, err := r.ToURL(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path", "port": 812.0})
 	if assert.NoError(t, err) {
@@ -207,6 +218,7 @@ func TestToPortDouble(t *testing.T) {
 
 func TestGetParameters(t *testing.T) {
 	r := remote.Get("ssh")
+
 	props, err := r.GetParameters(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path", "password": "pass"})
 	if assert.NoError(t, err) {
@@ -216,17 +228,20 @@ func TestGetParameters(t *testing.T) {
 
 func TestKeyFileParameters(t *testing.T) {
 	r := remote.Get("ssh")
-	file, err := ioutil.TempFile("", "ssh.test")
+
+	file, err := os.CreateTemp("", "ssh.test")
 	if !assert.NoError(t, err) {
 		return
 	}
-	defer os.Remove(file.Name())
+
+	defer func() { _ = os.Remove(file.Name()) }()
+
 	path, err := filepath.Abs(file.Name())
 	if !assert.NoError(t, err) {
 		return
 	}
 
-	err = ioutil.WriteFile(path, []byte("KEY"), 0600)
+	err = os.WriteFile(path, []byte("KEY"), 0600)
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -241,18 +256,22 @@ func TestKeyFileParameters(t *testing.T) {
 
 func TestBadKeyFileParameters(t *testing.T) {
 	r := remote.Get("ssh")
-	file, err := ioutil.TempFile("", "ssh.test")
+
+	file, err := os.CreateTemp("", "ssh.test")
 	if !assert.NoError(t, err) {
 		return
 	}
+
 	path, err := filepath.Abs(file.Name())
 	if !assert.NoError(t, err) {
 		return
 	}
+
 	err = file.Close()
 	if !assert.NoError(t, err) {
 		return
 	}
+
 	err = os.Remove(path)
 	if assert.NoError(t, err) {
 		_, err = r.GetParameters(map[string]interface{}{"username": "username", "address": "host",
@@ -263,16 +282,17 @@ func TestBadKeyFileParameters(t *testing.T) {
 
 func TestPasswordPrompt(t *testing.T) {
 	r := remote.Get("ssh")
-	readPassword = func(fd int) (bytes []byte, err error) {
+	readPassword = func(_ int) (bytes []byte, err error) {
 		return []byte("pass"), nil
 	}
-	fmtPrintf = func(format string, a ...interface{}) (n int, err error) {
+	fmtPrintf = func(_ string, _ ...interface{}) (n int, err error) {
 		return 0, nil
 	}
+
 	props, err := r.GetParameters(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path"})
 	if assert.NoError(t, err) {
-		readPassword = terminal.ReadPassword
+		readPassword = term.ReadPassword
 		fmtPrintf = fmt.Printf
 
 		assert.Nil(t, props["key"])
@@ -282,15 +302,15 @@ func TestPasswordPrompt(t *testing.T) {
 
 func TestBadPasswordPrompt(t *testing.T) {
 	r := remote.Get("ssh")
-	readPassword = func(fd int) (bytes []byte, err error) {
+	readPassword = func(_ int) (bytes []byte, err error) {
 		return []byte{}, errors.New("error")
 	}
-	fmtPrintf = func(format string, a ...interface{}) (n int, err error) {
+	fmtPrintf = func(_ string, _ ...interface{}) (n int, err error) {
 		return 0, nil
 	}
 	_, err := r.GetParameters(map[string]interface{}{"username": "username", "address": "host",
 		"path": "/path"})
-	readPassword = terminal.ReadPassword
+	readPassword = term.ReadPassword
 	fmtPrintf = fmt.Printf
 
 	assert.Error(t, err)
@@ -332,7 +352,9 @@ func TestValidateRemotePortFloat(t *testing.T) {
 
 func TestValidateRemotePortFloat32(t *testing.T) {
 	r := remote.Get("ssh")
+
 	var p float32 = 22.0
+
 	err := r.ValidateRemote(map[string]interface{}{"username": "username", "address": "host", "path": "/path",
 		"keyFile": "/keyfile", "password": "password", "port": p})
 	assert.NoError(t, err)
@@ -402,32 +424,39 @@ func TestGetAuthMissing(t *testing.T) {
 }
 
 func TestGetConnBadAuth(t *testing.T) {
-	dial = func(network string, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, nil
 	}
 	_, err := getConnection(map[string]interface{}{}, map[string]interface{}{})
 	dial = ssh.Dial
+
 	assert.Error(t, err)
 }
 
 func TestGetConnPassword(t *testing.T) {
 	host := ""
-	var config *ssh.ClientConfig = nil
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	var config *ssh.ClientConfig
+
+	dial = func(_ string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 		host = addr
 		config = cfg
+
 		return nil, nil
 	}
+
 	_, err := getConnection(map[string]interface{}{"username": "username", "address": "address"},
 		map[string]interface{}{"password": "password"})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "address", host)
 		assert.Equal(t, "username", config.User)
 	}
+
 	dial = ssh.Dial
 }
 
 func TestGetConnKey(t *testing.T) {
+	//nolint:gosec // Test RSA private key
 	key := `
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAsXU8SiL4eLBupbLEF9XAy+60Dr5+TPSUm8c27WCUfYOF5Yly
@@ -457,29 +486,35 @@ aI++JQKBgQDYBW6xXOYHFbCazz7euPRXaV0BX9Pt+ylrQvqDWwa6fk9FDGOrhRW8
 qXdXtd+SfLRrfCd1KJRp8NFIPFsk0T3iy8hxZJZSHtM6/nwM3p2rHw==
 -----END RSA PRIVATE KEY-----`
 	host := ""
-	var config *ssh.ClientConfig = nil
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	var config *ssh.ClientConfig
+
+	dial = func(_ string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 		host = addr
 		config = cfg
+
 		return nil, nil
 	}
+
 	_, err := getConnection(map[string]interface{}{"username": "username", "address": "address"},
 		map[string]interface{}{"key": key})
 	if assert.NoError(t, err) {
 		assert.Equal(t, "address", host)
 		assert.Equal(t, "username", config.User)
 	}
+
 	dial = ssh.Dial
 }
 
 func TestGetConnBadKey(t *testing.T) {
 	key := "notakey"
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, nil
 	}
 	_, err := getConnection(map[string]interface{}{"username": "username", "address": "address"},
 		map[string]interface{}{"key": key})
 	assert.Error(t, err)
+
 	dial = ssh.Dial
 }
 
@@ -487,14 +522,17 @@ func TestGetCommit(t *testing.T) {
 	remoteCommand := ""
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(conn *ssh.Client, command string) (bytes []byte, err error) {
+	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
 		remoteCommand = command
 		return []byte("{\"a\": \"b\", \"c\": {\"d\": \"e\"}}"), nil
 	}
+
 	r := remote.Get("ssh")
+
 	commit, err := r.GetCommit(map[string]interface{}{"username": "username", "address": "address", "path": "/path"},
 		map[string]interface{}{"password": "password"}, "id")
 	if assert.NoError(t, err) {
@@ -512,10 +550,11 @@ func TestGetCommit(t *testing.T) {
 func TestGetCommitBadJson(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(conn *ssh.Client, command string) (bytes []byte, err error) {
+	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
 		return []byte("foo"), nil
 	}
 	r := remote.Get("ssh")
@@ -530,10 +569,11 @@ func TestGetCommitBadJson(t *testing.T) {
 func TestGetCommitRunFail(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(conn *ssh.Client, command string) (bytes []byte, err error) {
+	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
 		return nil, errors.New("error")
 	}
 	r := remote.Get("ssh")
@@ -546,34 +586,37 @@ func TestGetCommitRunFail(t *testing.T) {
 }
 
 func TestGetCommitBadConn(t *testing.T) {
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, errors.New("error")
 	}
 	r := remote.Get("ssh")
 	_, err := r.GetCommit(map[string]interface{}{"username": "username", "address": "address", "path": "/path"},
 		map[string]interface{}{"password": "password"}, "id")
 	assert.Error(t, err)
+
 	dial = ssh.Dial
 }
 
 func TestListCommitsBadConn(t *testing.T) {
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, errors.New("error")
 	}
 	r := remote.Get("ssh")
 	_, err := r.ListCommits(map[string]interface{}{"username": "username", "address": "address", "path": "/path"},
 		map[string]interface{}{"password": "password"}, []remote.Tag{})
 	assert.Error(t, err)
+
 	dial = ssh.Dial
 }
 
 func TestListCommitsRunFail(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(conn *ssh.Client, command string) (bytes []byte, err error) {
+	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
 		return nil, errors.New("error")
 	}
 	r := remote.Get("ssh")
@@ -588,22 +631,28 @@ func TestListCommitsRunFail(t *testing.T) {
 func TestListCommits(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(conn *ssh.Client, command string) (bytes []byte, err error) {
+	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
 		if command == "ls -1 \"/path\"" {
 			return []byte("one\ntwo\n"), nil
 		}
+
 		if command == "cat \"/path/one/metadata.json\"" {
 			return []byte("{\"timestamp\": \"2019-09-20T13:45:36Z\"}"), nil
 		}
+
 		if command == "cat \"/path/two/metadata.json\"" {
 			return []byte("{\"timestamp\": \"2019-09-20T13:45:37Z\"}"), nil
 		}
+
 		return nil, errors.New("error")
 	}
+
 	r := remote.Get("ssh")
+
 	commits, err := r.ListCommits(map[string]interface{}{"username": "username", "address": "address", "path": "/path"},
 		map[string]interface{}{"password": "password"}, []remote.Tag{})
 	if assert.NoError(t, err) {
@@ -611,6 +660,7 @@ func TestListCommits(t *testing.T) {
 		assert.Equal(t, "two", commits[0].Id)
 		assert.Equal(t, "one", commits[1].Id)
 	}
+
 	run = runCommand
 	dial = ssh.Dial
 }
@@ -618,28 +668,35 @@ func TestListCommits(t *testing.T) {
 func TestListCommitsTags(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
-	dial = func(network string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(conn *ssh.Client, command string) (bytes []byte, err error) {
+	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
 		if command == "ls -1 \"/path\"" {
 			return []byte("one\ntwo\n"), nil
 		}
+
 		if command == "cat \"/path/one/metadata.json\"" {
 			return []byte("{\"timestamp\": \"2019-09-20T13:45:36Z\", \"tags\": {\"a\": \"b\"}}"), nil
 		}
+
 		if command == "cat \"/path/two/metadata.json\"" {
 			return []byte("{\"timestamp\": \"2019-09-20T13:45:37Z\", \"tags\": {\"c\": \"d\"}}"), nil
 		}
+
 		return nil, errors.New("error")
 	}
+
 	r := remote.Get("ssh")
+
 	commits, err := r.ListCommits(map[string]interface{}{"username": "username", "address": "address", "path": "/path"},
 		map[string]interface{}{"password": "password"}, []remote.Tag{{Key: "a"}})
 	if assert.NoError(t, err) {
 		assert.Len(t, commits, 1)
 		assert.Equal(t, "one", commits[0].Id)
 	}
+
 	run = runCommand
 	dial = ssh.Dial
 }
