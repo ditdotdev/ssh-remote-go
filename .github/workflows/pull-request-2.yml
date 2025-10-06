@@ -17,7 +17,7 @@ on:
         default: false
 
 env:
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.25.1'
   GOPRIVATE: github.com/datadatdat/*
   GONOPROXY: github.com/datadatdat/*
   GONOSUMDB: github.com/datadatdat/*
