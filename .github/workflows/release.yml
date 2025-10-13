@@ -29,10 +29,30 @@ jobs:
         run: git config --global url."https://${{ secrets.GO_MODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
         env:
           GO_MODULES_TOKEN: ${{ secrets.GO_MODULES_TOKEN }}
-      - name: Get Draft Release
+      - name: Get or Create Draft Release
         id: draft_release
         run: |
-          echo "upload_url=$(curl -sH "Authorization: token $GITHUB_TOKEN" https://api.github.com/repos/$GITHUB_REPOSITORY/releases | jq -rc '.[] | select(.draft) | .upload_url')" >> $GITHUB_OUTPUT
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Looking for draft release with tag: $TAG_NAME"
+          
+          # Try to find existing draft release for this tag
+          UPLOAD_URL=$(curl -sH "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" | \
+            jq -rc --arg tag "$TAG_NAME" '.[] | select(.draft and .tag_name == $tag) | .upload_url')
+          
+          if [ "$UPLOAD_URL" != "null" ] && [ -n "$UPLOAD_URL" ]; then
+            echo "Found existing draft release"
+            echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+          else
+            echo "No draft release found for tag $TAG_NAME, creating one..."
+            RESPONSE=$(curl -sH "Authorization: token $GITHUB_TOKEN" \
+              -X POST "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" \
+              -d "{\"tag_name\":\"$TAG_NAME\",\"name\":\"$TAG_NAME\",\"body\":\"Release $TAG_NAME - Updated to use remote-sdk-go v0.2.6\",\"draft\":true}")
+            
+            UPLOAD_URL=$(echo "$RESPONSE" | jq -rc '.upload_url')
+            echo "Created draft release with upload_url: $UPLOAD_URL"
+            echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Get Binary Name
