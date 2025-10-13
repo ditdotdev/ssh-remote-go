@@ -25,6 +25,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.1'
+      - name: Configure Git for private modules
+        run: git config --global url."https://${{ secrets.GO_MODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GO_MODULES_TOKEN: ${{ secrets.GO_MODULES_TOKEN }}
       - name: Get Draft Release
         id: draft_release
         run: |
@@ -36,8 +40,12 @@ jobs:
         run: ./.github/get-binary-name ssh ${{ runner.os }}
       - name: Build
         run: go build -o build/ssh ./cmd/ssh
+        env:
+          GOPRIVATE: github.com/datadatdat/*
       - name: Test
         run: go test ./...
+        env:
+          GOPRIVATE: github.com/datadatdat/*
       - name: Upload Artifact
         uses: actions/upload-release-asset@v1
         env:
