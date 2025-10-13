@@ -278,7 +278,7 @@ func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID st
 		return nil, err
 	}
 
-	return &remote.Commit{Id: commitID, Properties: commit}, nil
+	return &remote.Commit{ID: commitID, Properties: commit}, nil
 }
 
 func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map[string]interface{}, tags []remote.Tag) ([]remote.Commit, error) {
@@ -302,7 +302,7 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 
 		commit, err := readCommit(conn, properties, commitID)
 		if err == nil && remote.MatchTags(commit.Properties, tags) {
-			ret = append(ret, remote.Commit{Id: commit.Id, Properties: commit.Properties})
+			ret = append(ret, remote.Commit{ID: commit.ID, Properties: commit.Properties})
 		}
 	}
 

@@ -537,7 +537,7 @@ func TestGetCommit(t *testing.T) {
 		map[string]interface{}{"password": "password"}, "id")
 	if assert.NoError(t, err) {
 		assert.Equal(t, "cat \"/path/id/metadata.json\"", remoteCommand)
-		assert.Equal(t, "id", commit.Id)
+		assert.Equal(t, "id", commit.ID)
 		assert.Equal(t, "b", commit.Properties["a"])
 		props := commit.Properties["c"].(map[string]interface{})
 		assert.Equal(t, "e", props["d"])
@@ -657,8 +657,8 @@ func TestListCommits(t *testing.T) {
 		map[string]interface{}{"password": "password"}, []remote.Tag{})
 	if assert.NoError(t, err) {
 		assert.Len(t, commits, 2)
-		assert.Equal(t, "two", commits[0].Id)
-		assert.Equal(t, "one", commits[1].Id)
+		assert.Equal(t, "two", commits[0].ID)
+		assert.Equal(t, "one", commits[1].ID)
 	}
 
 	run = runCommand
@@ -694,7 +694,7 @@ func TestListCommitsTags(t *testing.T) {
 		map[string]interface{}{"password": "password"}, []remote.Tag{{Key: "a"}})
 	if assert.NoError(t, err) {
 		assert.Len(t, commits, 1)
-		assert.Equal(t, "one", commits[0].Id)
+		assert.Equal(t, "one", commits[0].ID)
 	}
 
 	run = runCommand
