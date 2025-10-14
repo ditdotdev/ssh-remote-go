@@ -1,8 +1,8 @@
 /*
- * Copyright The Titan Project Contributors.
+ * Copyright Datadatdat.
  */
 
-// Package ssh provides SSH remote backend functionality for Titan data storage.
+// Package ssh provides SSH remote backend functionality for Datadatdat data storage.
 package ssh
 
 import (
