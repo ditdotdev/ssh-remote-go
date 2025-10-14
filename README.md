@@ -1,7 +1,7 @@
-# Titan SSH Provider
+# Datadatdat SSH Provider
 
-This is a basic Titan SSH provider. For more information on how it works,
-consult the titan documentation.
+This is a basic Datadatdat SSH provider. For more information on how it works,
+consult the datadatdat documentation.
 
 ## CI/CD Pipeline
 
@@ -13,13 +13,13 @@ This repository includes a comprehensive Pull Request 2 workflow with:
 
 ## Contributing
 
-This project follows the Titan community best practices:
+This project follows the Datadatdat community best practices:
 
-  * [Contributing](https://github.com/titan-data/.github/blob/master/CONTRIBUTING.md)
-  * [Code of Conduct](https://github.com/titan-data/.github/blob/master/CODE_OF_CONDUCT.md)
-  * [Community Support](https://github.com/titan-data/.github/blob/master/SUPPORT.md)
+  * [Contributing](https://github.com/datadatdat/.github/blob/master/CONTRIBUTING.md)
+  * [Code of Conduct](https://github.com/datadatdat/.github/blob/master/CODE_OF_CONDUCT.md)
+  * [Community Support](https://github.com/datadatdat/.github/blob/master/SUPPORT.md)
 
-It is maintained by the [Titan community maintainers](https://github.com/titan-data/.github/blob/master/MAINTAINERS.md)
+It is maintained by the [Datadatdat community maintainers](https://github.com/datadatdat/.github/blob/master/MAINTAINERS.md)
 
 For more information on how it works, and how to build and release new versions,
 see the [Development Guidelines](DEVELOPING.md).
