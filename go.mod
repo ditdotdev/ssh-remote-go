@@ -1,7 +1,7 @@
 module github.com/datadatdat/ssh-remote-go
 
 require (
-	github.com/datadatdat/remote-sdk-go v1.0.0
+	github.com/datadatdat/remote-sdk-go v1.1.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.40.0
 	golang.org/x/term v0.33.0
@@ -31,5 +31,3 @@ require (
 )
 
 go 1.25.1
-
-replace github.com/datadatdat/remote-sdk-go => ../remote-sdk-go
