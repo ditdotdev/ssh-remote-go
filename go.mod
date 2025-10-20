@@ -31,3 +31,5 @@ require (
 )
 
 go 1.25.1
+
+replace github.com/datadatdat/remote-sdk-go => ../remote-sdk-go
