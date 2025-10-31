@@ -19,9 +19,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.1'
+      - name: Configure Git for private modules
+        run: git config --global url."https://${{ secrets.GO_MODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GO_MODULES_TOKEN: ${{ secrets.GO_MODULES_TOKEN }}
       - name: Build
         run: go build -v ./...
+        env:
+          GOPRIVATE: github.com/datadatdat/*
       - name: Build command
         run: go build -o build/ssh ./cmd/ssh
+        env:
+          GOPRIVATE: github.com/datadatdat/*
       - name: Test
         run: go test -v ./...
+        env:
+          GOPRIVATE: github.com/datadatdat/*
