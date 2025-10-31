@@ -47,7 +47,7 @@ jobs:
             echo "No published release found for tag $TAG_NAME, creating one..."
             RESPONSE=$(curl -sH "Authorization: token $GITHUB_TOKEN" \
               -X POST "https://api.github.com/repos/$GITHUB_REPOSITORY/releases" \
-              -d "{\"tag_name\":\"$TAG_NAME\",\"name\":\"$TAG_NAME\",\"body\":\"Release $TAG_NAME - Updated to use remote-sdk-go v0.2.6\",\"draft\":true}")
+              -d "{\"tag_name\":\"$TAG_NAME\",\"name\":\"$TAG_NAME\",\"body\":\"Release $TAG_NAME - Updated to use remote-sdk-go v0.2.6\",\"draft\":false}")
             
             UPLOAD_URL=$(echo "$RESPONSE" | jq -rc '.upload_url')
             echo "Created published release with upload_url: $UPLOAD_URL"
