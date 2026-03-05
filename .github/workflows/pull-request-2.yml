@@ -276,6 +276,8 @@ jobs:
   pr-check:
     name: Pull Request Check
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     needs: [security, quality, build-test, integration, benchmark]
     if: always()
     steps:
