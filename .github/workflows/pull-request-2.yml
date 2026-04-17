@@ -298,7 +298,7 @@ jobs:
 
       - name: Comment PR with results
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GO_MODULES_TOKEN }}
           script: |
