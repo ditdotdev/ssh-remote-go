@@ -230,7 +230,7 @@ func getConnection(properties map[string]interface{}, parameters map[string]inte
 
 	config := &ssh.ClientConfig{
 		User:            properties["username"].(string),
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // Intentional for testing
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 -- Intentional for testing
 	}
 
 	if key != "" {
