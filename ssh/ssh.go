@@ -19,6 +19,16 @@ import (
 	"strings"
 )
 
+const (
+	propKeyFile  = "keyFile"
+	propUsername = "username"
+	propAddress  = "address"
+	propPath     = "path"
+	propPort     = "port"
+	propPassword = "password"
+	propKey      = "key"
+)
+
 type sshRemote struct {
 }
 
@@ -53,7 +63,7 @@ func (s sshRemote) FromURL(rawURL string, additionalProperties map[string]string
 		path = path[3:]
 	}
 
-	keyFile := additionalProperties["keyFile"]
+	keyFile := additionalProperties[propKeyFile]
 
 	password, passwordSet := url.User.Password()
 	if keyFile != "" && passwordSet {
@@ -61,19 +71,19 @@ func (s sshRemote) FromURL(rawURL string, additionalProperties map[string]string
 	}
 
 	for k := range additionalProperties {
-		if k != "keyFile" {
+		if k != propKeyFile {
 			return nil, fmt.Errorf("invalid rmeote property '%s'", k)
 		}
 	}
 
 	result := map[string]interface{}{
-		"username": url.User.Username(),
-		"address":  url.Hostname(),
-		"path":     path,
+		propUsername: url.User.Username(),
+		propAddress:  url.Hostname(),
+		propPath:     path,
 	}
 
 	if password != "" {
-		result["password"] = password
+		result[propPassword] = password
 	}
 
 	if url.Port() != "" {
@@ -82,11 +92,11 @@ func (s sshRemote) FromURL(rawURL string, additionalProperties map[string]string
 			return nil, fmt.Errorf("invalid port '%s': %w", url.Port(), err)
 		}
 
-		result["port"] = port
+		result[propPort] = port
 	}
 
 	if keyFile != "" {
-		result["keyFile"] = keyFile
+		result[propKeyFile] = keyFile
 	}
 
 	return result, nil
@@ -115,13 +125,13 @@ func getPort(port interface{}) (int, error) {
 }
 
 func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]string, error) {
-	u := fmt.Sprintf("ssh://%s", properties["username"])
-	if properties["password"] != nil {
+	u := fmt.Sprintf("ssh://%s", properties[propUsername])
+	if properties[propPassword] != nil {
 		u += ":*****"
 	}
 
-	u += fmt.Sprintf("@%s", properties["address"])
-	if port, ok := properties["port"]; ok {
+	u += fmt.Sprintf("@%s", properties[propAddress])
+	if port, ok := properties[propPort]; ok {
 		portval, err := getPort(port)
 		if err != nil {
 			return "", nil, err
@@ -130,15 +140,15 @@ func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]
 		u += fmt.Sprintf(":%d", portval)
 	}
 
-	if properties["path"].(string)[0:1] != "/" {
+	if properties[propPath].(string)[0:1] != "/" {
 		u += "/~/"
 	}
 
-	u += properties["path"].(string)
+	u += properties[propPath].(string)
 
 	retProps := map[string]string{}
-	if properties["keyFile"] != nil {
-		retProps["keyFile"] = properties["keyFile"].(string)
+	if properties[propKeyFile] != nil {
+		retProps[propKeyFile] = properties[propKeyFile].(string)
 	}
 
 	return u, retProps, nil
@@ -150,16 +160,16 @@ var fmtPrintf = fmt.Printf
 func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
-	if remoteProperties["keyFile"] != nil {
-		content, err := os.ReadFile(remoteProperties["keyFile"].(string))
+	if remoteProperties[propKeyFile] != nil {
+		content, err := os.ReadFile(remoteProperties[propKeyFile].(string))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read key file %s: %w", remoteProperties["keyFile"], err)
+			return nil, fmt.Errorf("failed to read key file %s: %w", remoteProperties[propKeyFile], err)
 		}
 
-		result["key"] = string(content)
+		result[propKey] = string(content)
 	}
 
-	if remoteProperties["password"] == nil && remoteProperties["keyFile"] == nil {
+	if remoteProperties[propPassword] == nil && remoteProperties[propKeyFile] == nil {
 		_, _ = fmtPrintf("password: ")
 
 		pw, err := readPassword(0)
@@ -167,19 +177,19 @@ func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[s
 			return nil, fmt.Errorf("failed to read password: %w", err)
 		}
 
-		result["password"] = string(pw)
+		result[propPassword] = string(pw)
 	}
 
 	return result, nil
 }
 
 func (s sshRemote) ValidateRemote(properties map[string]interface{}) error {
-	err := remote.ValidateFields(properties, []string{"username", "address", "path"}, []string{"password", "port", "keyFile"})
+	err := remote.ValidateFields(properties, []string{propUsername, propAddress, propPath}, []string{propPassword, propPort, propKeyFile})
 	if err != nil {
 		return err
 	}
 
-	if port, ok := properties["port"]; ok {
+	if port, ok := properties[propPort]; ok {
 		_, err := getPort(port)
 		return err
 	}
@@ -188,7 +198,7 @@ func (s sshRemote) ValidateRemote(properties map[string]interface{}) error {
 }
 
 func (s sshRemote) ValidateParameters(parameters map[string]interface{}) error {
-	return remote.ValidateFields(parameters, []string{}, []string{"password", "key"})
+	return remote.ValidateFields(parameters, []string{}, []string{propPassword, propKey})
 }
 
 /*
@@ -197,9 +207,9 @@ func (s sshRemote) ValidateParameters(parameters map[string]interface{}) error {
  * the first (password) or second (key).
  */
 func getAuth(properties map[string]interface{}, parameters map[string]interface{}) (string, string, error) {
-	paramsPassword, paramsPasswordOk := parameters["password"]
-	paramsKey, paramsKeyOk := parameters["key"]
-	remotePassword, remotePasswordOk := properties["password"]
+	paramsPassword, paramsPasswordOk := parameters[propPassword]
+	paramsKey, paramsKeyOk := parameters[propKey]
+	remotePassword, remotePasswordOk := properties[propPassword]
 
 	if paramsPasswordOk && paramsKeyOk {
 		return "", "", errors.New("only one of password or key can be specified")
@@ -229,7 +239,7 @@ func getConnection(properties map[string]interface{}, parameters map[string]inte
 	}
 
 	config := &ssh.ClientConfig{
-		User:            properties["username"].(string),
+		User:            properties[propUsername].(string),
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 -- Intentional for testing
 	}
 
@@ -244,7 +254,7 @@ func getConnection(properties map[string]interface{}, parameters map[string]inte
 		config.Auth = []ssh.AuthMethod{ssh.Password(password)}
 	}
 
-	return dial("tcp", properties["address"].(string), config)
+	return dial("tcp", properties[propAddress].(string), config)
 }
 
 func runCommand(conn *ssh.Client, command string) ([]byte, error) {
@@ -266,7 +276,7 @@ func runCommand(conn *ssh.Client, command string) ([]byte, error) {
 var run = runCommand
 
 func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID string) (*remote.Commit, error) {
-	output, err := run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties["path"], commitID))
+	output, err := run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties[propPath], commitID))
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +299,7 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 
 	defer func() { _ = conn.Close() }()
 
-	output, err := run(conn, fmt.Sprintf("ls -1 \"%s\"", properties["path"]))
+	output, err := run(conn, fmt.Sprintf("ls -1 \"%s\"", properties[propPath]))
 	if err != nil {
 		return nil, err
 	}
