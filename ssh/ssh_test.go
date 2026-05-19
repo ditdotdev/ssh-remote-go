@@ -21,6 +21,7 @@ const (
 	testKeyFile = "/keyfile"
 	testFoo     = "foo"
 	testHost    = "host"
+	testLsPath  = "ls -1 \"" + testPath + "\""
 )
 
 func TestRegistered(t *testing.T) {
@@ -644,7 +645,7 @@ func TestListCommits(t *testing.T) {
 		return &ssh.Client{Conn: conn}, nil
 	}
 	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
-		if command == "ls -1 \"/path\"" {
+		if command == testLsPath {
 			return []byte("one\ntwo\n"), nil
 		}
 
@@ -681,7 +682,7 @@ func TestListCommitsTags(t *testing.T) {
 		return &ssh.Client{Conn: conn}, nil
 	}
 	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
-		if command == "ls -1 \"/path\"" {
+		if command == testLsPath {
 			return []byte("one\ntwo\n"), nil
 		}
 
@@ -707,4 +708,242 @@ func TestListCommitsTags(t *testing.T) {
 
 	run = runCommand
 	dial = ssh.Dial
+}
+
+// --- Issue #1: command injection via unvalidated commitID ---
+
+func TestGetCommitRejectsMaliciousCommitID(t *testing.T) {
+	// The malicious commitID must never reach the `run` shim. If it does,
+	// it would execute arbitrary shell commands on the remote host.
+	runCalled := false
+	conn := new(MockConn)
+	conn.On("Close").Return(nil)
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+		return &ssh.Client{Conn: conn}, nil
+	}
+	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+		runCalled = true
+		return []byte("{}"), nil
+	}
+
+	defer func() {
+		run = runCommand
+		dial = ssh.Dial
+	}()
+
+	r, _ := remote.Get("ssh")
+	_, err := r.GetCommit(
+		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+		map[string]interface{}{propPassword: propPassword},
+		`id"; cat /etc/passwd; echo "`,
+	)
+	assert.Error(t, err)
+	assert.False(t, runCalled, "malicious commitID must not reach the run shim")
+}
+
+func TestListCommitsRejectsMaliciousCommitID(t *testing.T) {
+	// ListCommits parses `ls -1` output as commit IDs; an attacker who controls
+	// the remote filesystem could plant a directory name with shell metacharacters
+	// which would then be interpolated into the `cat` command. readCommit must
+	// reject those before they reach `run`.
+	commands := []string{}
+	conn := new(MockConn)
+	conn.On("Close").Return(nil)
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+		return &ssh.Client{Conn: conn}, nil
+	}
+	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
+		commands = append(commands, command)
+		if command == testLsPath {
+			// First entry is malicious, second is legitimate.
+			return []byte("evil\"; rm -rf /; echo \"\nlegit\n"), nil
+		}
+
+		if command == "cat \"/path/legit/metadata.json\"" {
+			return []byte("{\"timestamp\": \"2019-09-20T13:45:36Z\"}"), nil
+		}
+
+		return nil, errors.New("unexpected command")
+	}
+
+	defer func() {
+		run = runCommand
+		dial = ssh.Dial
+	}()
+
+	r, _ := remote.Get("ssh")
+	commits, err := r.ListCommits(
+		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+		map[string]interface{}{propPassword: propPassword},
+		[]remote.Tag{},
+	)
+	if assert.NoError(t, err) {
+		assert.Len(t, commits, 1)
+		assert.Equal(t, "legit", commits[0].ID)
+	}
+
+	for _, cmd := range commands {
+		assert.NotContains(t, cmd, "rm -rf", "malicious commitID reached the shell command")
+		assert.NotContains(t, cmd, "evil", "malicious commitID reached the shell command")
+	}
+}
+
+func TestGetCommitValidCommitIDCharacters(t *testing.T) {
+	// Valid commit IDs use [A-Za-z0-9._-]. Verify the allowlist accepts a
+	// realistic ID containing all of those.
+	conn := new(MockConn)
+	conn.On("Close").Return(nil)
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+		return &ssh.Client{Conn: conn}, nil
+	}
+	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+		return []byte("{}"), nil
+	}
+
+	defer func() {
+		run = runCommand
+		dial = ssh.Dial
+	}()
+
+	r, _ := remote.Get("ssh")
+	_, err := r.GetCommit(
+		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+		map[string]interface{}{propPassword: propPassword},
+		"abc123.DEF_456-789",
+	)
+	assert.NoError(t, err)
+}
+
+func TestGetCommitEmptyCommitIDRejected(t *testing.T) {
+	runCalled := false
+	conn := new(MockConn)
+	conn.On("Close").Return(nil)
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+		return &ssh.Client{Conn: conn}, nil
+	}
+	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+		runCalled = true
+		return []byte("{}"), nil
+	}
+
+	defer func() {
+		run = runCommand
+		dial = ssh.Dial
+	}()
+
+	r, _ := remote.Get("ssh")
+	_, err := r.GetCommit(
+		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+		map[string]interface{}{propPassword: propPassword},
+		"",
+	)
+	assert.Error(t, err)
+	assert.False(t, runCalled, "empty commitID must not reach the run shim")
+}
+
+// --- Issue #2: unchecked .(string) type assertions ---
+
+func TestToURLWithWrongPathType(t *testing.T) {
+	r, _ := remote.Get("ssh")
+	assert.NotPanics(t, func() {
+		_, _, err := r.ToURL(map[string]interface{}{
+			propUsername: propUsername,
+			propAddress:  testHost,
+			propPath:     123, // wrong type: int, not string
+		})
+		assert.Error(t, err)
+	})
+}
+
+func TestToURLWithWrongKeyFileType(t *testing.T) {
+	r, _ := remote.Get("ssh")
+	assert.NotPanics(t, func() {
+		_, _, err := r.ToURL(map[string]interface{}{
+			propUsername: propUsername,
+			propAddress:  testHost,
+			propPath:     testPath,
+			propKeyFile:  42, // wrong type: int, not string
+		})
+		assert.Error(t, err)
+	})
+}
+
+func TestGetParametersWithWrongKeyFileType(t *testing.T) {
+	r, _ := remote.Get("ssh")
+	assert.NotPanics(t, func() {
+		_, err := r.GetParameters(map[string]interface{}{
+			propUsername: propUsername,
+			propAddress:  testHost,
+			propPath:     testPath,
+			propKeyFile:  3.14, // wrong type: float, not string
+		})
+		assert.Error(t, err)
+	})
+}
+
+// --- Issue #8: typo in error message ---
+
+func TestFromURLErrorUsesCorrectSpelling(t *testing.T) {
+	r, _ := remote.Get("ssh")
+	_, err := r.FromURL("ssh://user@host/path", map[string]string{testFoo: testBar})
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "remote")
+		assert.NotContains(t, err.Error(), "rmeote")
+	}
+}
+
+// --- stringOrError: missing-key branch ---
+
+func TestToURLMissingPath(t *testing.T) {
+	r, _ := remote.Get("ssh")
+	assert.NotPanics(t, func() {
+		_, _, err := r.ToURL(map[string]interface{}{
+			propUsername: propUsername,
+			propAddress:  testHost,
+			// propPath intentionally absent
+		})
+		assert.Error(t, err)
+	})
+}
+
+// --- ListCommits: empty line in directory listing is skipped silently ---
+
+func TestListCommitsSkipsBlankLines(t *testing.T) {
+	conn := new(MockConn)
+	conn.On("Close").Return(nil)
+
+	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+		return &ssh.Client{Conn: conn}, nil
+	}
+	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
+		if command == testLsPath {
+			return []byte("\n\nrealid\n\n"), nil
+		}
+
+		if command == "cat \"/path/realid/metadata.json\"" {
+			return []byte("{\"timestamp\": \"2019-09-20T13:45:36Z\"}"), nil
+		}
+
+		return nil, errors.New("unexpected command")
+	}
+
+	defer func() {
+		run = runCommand
+		dial = ssh.Dial
+	}()
+
+	r, _ := remote.Get("ssh")
+	commits, err := r.ListCommits(
+		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+		map[string]interface{}{propPassword: propPassword},
+		[]remote.Tag{},
+	)
+	if assert.NoError(t, err) {
+		assert.Len(t, commits, 1)
+		assert.Equal(t, "realid", commits[0].ID)
+	}
 }
