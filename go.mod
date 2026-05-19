@@ -1,7 +1,7 @@
 module github.com/datadatdat/ssh-remote-go
 
 require (
-	github.com/datadatdat/remote-sdk-go v1.9.1-0.20260518183518-25a38bddee06
+	github.com/datadatdat/remote-sdk-go v1.10.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.51.0
 	golang.org/x/term v0.43.0
