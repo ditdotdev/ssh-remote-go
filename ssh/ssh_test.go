@@ -24,7 +24,7 @@ const (
 )
 
 func TestRegistered(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	ret, err := r.Type()
 	if assert.NoError(t, err) {
@@ -33,7 +33,7 @@ func TestRegistered(t *testing.T) {
 }
 
 func TestFromURL(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	props, err := r.FromURL("ssh://user:pass@host:8022/path", map[string]string{})
 	if assert.NoError(t, err) {
@@ -47,7 +47,7 @@ func TestFromURL(t *testing.T) {
 }
 
 func TestSimple(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	props, err := r.FromURL("ssh://user@host/path", map[string]string{})
 	if assert.NoError(t, err) {
@@ -61,7 +61,7 @@ func TestSimple(t *testing.T) {
 }
 
 func TestKeyFile(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	props, err := r.FromURL("ssh://user@host/path", map[string]string{propKeyFile: "~/.ssh/id_dsa"})
 	if assert.NoError(t, err) {
@@ -70,7 +70,7 @@ func TestKeyFile(t *testing.T) {
 }
 
 func TestRelativePath(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	props, err := r.FromURL("ssh://user@host/~/relative/path", map[string]string{})
 	if assert.NoError(t, err) {
@@ -79,67 +79,67 @@ func TestRelativePath(t *testing.T) {
 }
 
 func TestBadUrl(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh://host\nname", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestBadScheme(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("foo://user:pass@host:8022/path", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestBadPasswordAndKeyFile(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh://user:password@host/path", map[string]string{propKeyFile: "~/.ssh/id_dsa"})
 	assert.Error(t, err)
 }
 
 func TestBadProperty(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh://user@host/path", map[string]string{testFoo: testBar})
 	assert.Error(t, err)
 }
 
 func TestBadMissingHost(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh:///path", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestBadSchemeOnly(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestBadMissingUsername(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh://host/path", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestBadPort(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh://user@host:29348529384572398457932847539/path", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestBadMissingPath(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh://user@host", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestBadMissingHostWithUser(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.FromURL("ssh://user@/path", map[string]string{})
 	assert.Error(t, err)
 }
 
 func TestToURL(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	u, props, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath})
@@ -150,7 +150,7 @@ func TestToURL(t *testing.T) {
 }
 
 func TestToPassword(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	u, props, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath, propPassword: "pass"})
@@ -161,7 +161,7 @@ func TestToPassword(t *testing.T) {
 }
 
 func TestToPort(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	u, props, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath, propPort: 812})
@@ -172,14 +172,14 @@ func TestToPort(t *testing.T) {
 }
 
 func TestToBadPort(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, _, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath, propPort: "812"})
 	assert.Error(t, err)
 }
 
 func TestToRelativePath(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	u, props, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: propPath})
@@ -190,7 +190,7 @@ func TestToRelativePath(t *testing.T) {
 }
 
 func TestToKeyFile(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	u, props, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath, propKeyFile: "keyfile"})
@@ -203,7 +203,7 @@ func TestToKeyFile(t *testing.T) {
 
 func TestToPortFloat(t *testing.T) {
 	p := float32(812)
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	u, props, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath, propPort: p})
@@ -214,7 +214,7 @@ func TestToPortFloat(t *testing.T) {
 }
 
 func TestToPortDouble(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	u, props, err := r.ToURL(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath, propPort: 812.0})
@@ -225,7 +225,7 @@ func TestToPortDouble(t *testing.T) {
 }
 
 func TestGetParameters(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	props, err := r.GetParameters(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath, propPassword: "pass"})
@@ -235,7 +235,7 @@ func TestGetParameters(t *testing.T) {
 }
 
 func TestKeyFileParameters(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	file, err := os.CreateTemp("", "ssh.test")
 	if !assert.NoError(t, err) {
@@ -263,7 +263,7 @@ func TestKeyFileParameters(t *testing.T) {
 }
 
 func TestBadKeyFileParameters(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	file, err := os.CreateTemp("", "ssh.test")
 	if !assert.NoError(t, err) {
@@ -289,7 +289,7 @@ func TestBadKeyFileParameters(t *testing.T) {
 }
 
 func TestPasswordPrompt(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	readPassword = func(_ int) (bytes []byte, err error) {
 		return []byte("pass"), nil
 	}
@@ -309,7 +309,7 @@ func TestPasswordPrompt(t *testing.T) {
 }
 
 func TestBadPasswordPrompt(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	readPassword = func(_ int) (bytes []byte, err error) {
 		return []byte{}, errors.New("error")
 	}
@@ -325,41 +325,41 @@ func TestBadPasswordPrompt(t *testing.T) {
 }
 
 func TestValidateRemoteRequiredOnly(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateRemote(map[string]interface{}{propUsername: propUsername, propAddress: testHost, propPath: testPath})
 	assert.NoError(t, err)
 }
 
 func TestValidateRemoteAllOptional(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateRemote(map[string]interface{}{propUsername: propUsername, propAddress: testHost, propPath: testPath,
 		propKeyFile: testKeyFile, propPassword: propPassword, propPort: 8022})
 	assert.NoError(t, err)
 }
 
 func TestValidateRemoteBadPort(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateRemote(map[string]interface{}{propUsername: propUsername, propAddress: testHost, propPath: testPath,
 		propKeyFile: testKeyFile, propPassword: propPassword, propPort: testFoo})
 	assert.Error(t, err)
 }
 
 func TestValidateRemoteBadPortNegative(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateRemote(map[string]interface{}{propUsername: propUsername, propAddress: testHost, propPath: testPath,
 		propKeyFile: testKeyFile, propPassword: propPassword, propPort: -1})
 	assert.Error(t, err)
 }
 
 func TestValidateRemotePortFloat(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateRemote(map[string]interface{}{propUsername: propUsername, propAddress: testHost, propPath: testPath,
 		propKeyFile: testKeyFile, propPassword: propPassword, propPort: 22.0})
 	assert.NoError(t, err)
 }
 
 func TestValidateRemotePortFloat32(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	var p float32 = 22.0
 
@@ -369,32 +369,32 @@ func TestValidateRemotePortFloat32(t *testing.T) {
 }
 
 func TestValidateRemoteMissingRequired(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateRemote(map[string]interface{}{propUsername: propUsername, propAddress: testHost})
 	assert.Error(t, err)
 }
 
 func TestValidateRemoteExtraProperty(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateRemote(map[string]interface{}{propUsername: propUsername, propAddress: testHost, propPath: testPath,
 		testFoo: testBar})
 	assert.Error(t, err)
 }
 
 func TestValidateParametersEmpty(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateParameters(map[string]interface{}{})
 	assert.NoError(t, err)
 }
 
 func TestValidateParametersAllOptional(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateParameters(map[string]interface{}{propKey: propKey, propPassword: propPassword})
 	assert.NoError(t, err)
 }
 
 func TestValidateParametersUnknown(t *testing.T) {
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	err := r.ValidateParameters(map[string]interface{}{testFoo: testBar})
 	assert.Error(t, err)
 }
@@ -539,7 +539,7 @@ func TestGetCommit(t *testing.T) {
 		return []byte("{\"a\": \"b\", \"c\": {\"d\": \"e\"}}"), nil
 	}
 
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	commit, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
@@ -565,7 +565,7 @@ func TestGetCommitBadJson(t *testing.T) {
 	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
 		return []byte(testFoo), nil
 	}
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
 	assert.Error(t, err)
@@ -584,7 +584,7 @@ func TestGetCommitRunFail(t *testing.T) {
 	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
 		return nil, errors.New("error")
 	}
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
 	assert.Error(t, err)
@@ -597,7 +597,7 @@ func TestGetCommitBadConn(t *testing.T) {
 	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, errors.New("error")
 	}
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
 	assert.Error(t, err)
@@ -609,7 +609,7 @@ func TestListCommitsBadConn(t *testing.T) {
 	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, errors.New("error")
 	}
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{})
 	assert.Error(t, err)
@@ -627,7 +627,7 @@ func TestListCommitsRunFail(t *testing.T) {
 	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
 		return nil, errors.New("error")
 	}
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 	_, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{})
 	assert.Error(t, err)
@@ -659,7 +659,7 @@ func TestListCommits(t *testing.T) {
 		return nil, errors.New("error")
 	}
 
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	commits, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{})
@@ -696,7 +696,7 @@ func TestListCommitsTags(t *testing.T) {
 		return nil, errors.New("error")
 	}
 
-	r := remote.Get("ssh")
+	r, _ := remote.Get("ssh")
 
 	commits, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{{Key: "a"}})
