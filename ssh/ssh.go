@@ -15,9 +15,49 @@ import (
 	"golang.org/x/term"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+// commitIDPattern restricts commit identifiers to characters that are safe to
+// interpolate into a remote shell command. Anything else risks command injection
+// through the unquoted `commitID` argument used in `cat "<path>/<id>/..."`.
+var commitIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// validateCommitID returns an error if the supplied commit ID contains any
+// character outside the allowlist defined by commitIDPattern. The check guards
+// against attackers who control the remote filesystem (or MITM the SSH
+// connection) injecting shell metacharacters via crafted directory names.
+func validateCommitID(commitID string) error {
+	if commitID == "" {
+		return errors.New("commitID is required")
+	}
+
+	if !commitIDPattern.MatchString(commitID) {
+		return fmt.Errorf("invalid commitID %q: must match %s", commitID, commitIDPattern)
+	}
+
+	return nil
+}
+
+// stringOrError extracts a string-typed map entry safely. ValidateRemote should
+// guarantee the type at the SDK boundary, but the type system gives no
+// compile-time enforcement, so any unchecked `.(string)` would panic on
+// misconfigured callers. Callers should propagate the returned error.
+func stringOrError(m map[string]interface{}, key string) (string, error) {
+	v, ok := m[key]
+	if !ok {
+		return "", fmt.Errorf("missing key %q", key)
+	}
+
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("key %q: expected string, got %T", key, v)
+	}
+
+	return s, nil
+}
 
 const (
 	propKeyFile  = "keyFile"
@@ -72,7 +112,7 @@ func (s sshRemote) FromURL(rawURL string, additionalProperties map[string]string
 
 	for k := range additionalProperties {
 		if k != propKeyFile {
-			return nil, fmt.Errorf("invalid rmeote property '%s'", k)
+			return nil, fmt.Errorf("invalid remote property '%s'", k)
 		}
 	}
 
@@ -140,30 +180,48 @@ func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]
 		u += fmt.Sprintf(":%d", portval)
 	}
 
-	if properties[propPath].(string)[0:1] != "/" {
+	path, err := stringOrError(properties, propPath)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if !strings.HasPrefix(path, "/") {
 		u += "/~/"
 	}
 
-	u += properties[propPath].(string)
+	u += path
 
 	retProps := map[string]string{}
 	if properties[propKeyFile] != nil {
-		retProps[propKeyFile] = properties[propKeyFile].(string)
+		keyFile, err := stringOrError(properties, propKeyFile)
+		if err != nil {
+			return "", nil, err
+		}
+
+		retProps[propKeyFile] = keyFile
 	}
 
 	return u, retProps, nil
 }
 
-var readPassword = term.ReadPassword
-var fmtPrintf = fmt.Printf
+var (
+	readPassword = term.ReadPassword
+	fmtPrintf    = fmt.Printf
+	fmtFprintf   = fmt.Fprintf
+)
 
 func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
 	if remoteProperties[propKeyFile] != nil {
-		content, err := os.ReadFile(remoteProperties[propKeyFile].(string))
+		keyFile, err := stringOrError(remoteProperties, propKeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read key file %s: %w", remoteProperties[propKeyFile], err)
+			return nil, err
+		}
+
+		content, err := os.ReadFile(keyFile) // #nosec G304 -- keyFile is supplied as a remote property by the operator and validated as a string above.
+		if err != nil {
+			return nil, fmt.Errorf("failed to read key file %s: %w", keyFile, err)
 		}
 
 		result[propKey] = string(content)
@@ -276,6 +334,10 @@ func runCommand(conn *ssh.Client, command string) ([]byte, error) {
 var run = runCommand
 
 func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID string) (*remote.Commit, error) {
+	if err := validateCommitID(commitID); err != nil {
+		return nil, err
+	}
+
 	output, err := run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties[propPath], commitID))
 	if err != nil {
 		return nil, err
@@ -309,9 +371,20 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
 		commitID := strings.TrimSpace(scanner.Text())
+		if commitID == "" {
+			continue
+		}
 
 		commit, err := readCommit(conn, properties, commitID)
-		if err == nil && remote.MatchTags(commit.Properties, tags) {
+		if err != nil {
+			// A single bad entry shouldn't abort the listing (the directory may
+			// contain unrelated files), but the failure shouldn't be silent
+			// either — surface it via stderr so operators can investigate.
+			_, _ = fmtFprintf(os.Stderr, "ssh remote: skipping commit %q: %v\n", commitID, err)
+			continue
+		}
+
+		if remote.MatchTags(commit.Properties, tags) {
 			ret = append(ret, remote.Commit{ID: commit.ID, Properties: commit.Properties})
 		}
 	}
