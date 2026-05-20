@@ -10,14 +10,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/datadatdat/remote-sdk-go/remote"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/term"
+	"io"
+	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/datadatdat/remote-sdk-go/remote"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // commitIDPattern restricts commit identifiers to characters that are safe to
@@ -60,23 +65,56 @@ func stringOrError(m map[string]interface{}, key string) (string, error) {
 }
 
 const (
-	propKeyFile  = "keyFile"
-	propUsername = "username"
-	propAddress  = "address"
-	propPath     = "path"
-	propPort     = "port"
-	propPassword = "password"
-	propKey      = "key"
+	propKeyFile        = "keyFile"
+	propUsername       = "username"
+	propAddress        = "address"
+	propPath           = "path"
+	propPort           = "port"
+	propPassword       = "password"
+	propKey            = "key"
+	propKnownHostsFile = "known_hosts_file"
+	propSkipHostCheck  = "skip_host_check"
 )
 
-type sshRemote struct {
+// sshClient is the SSH remote provider with all its side-effecting collaborators
+// (network dial, SSH command execution, password prompt I/O, error reporting)
+// injected as function values. Tests construct an sshClient with their own
+// mocks; production code uses newSSHClient() which wires the real
+// implementations. This replaces the package-level mutable vars
+// (`dial`, `run`, `readPassword`, `fmtPrintf`, `fmtFprintf`) the legacy test
+// suite used for mocking — those were incompatible with t.Parallel() and -race.
+type sshClient struct {
+	// dial opens a TCP+SSH connection. Defaults to ssh.Dial.
+	dial func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error)
+	// run executes a single command over an established SSH connection.
+	// Defaults to runCommand.
+	run func(conn *ssh.Client, command string) ([]byte, error)
+	// readPassword reads a password from a terminal fd without echoing.
+	// Defaults to term.ReadPassword.
+	readPassword func(fd int) ([]byte, error)
+	// fmtPrintf writes a prompt to stdout. Defaults to fmt.Printf.
+	fmtPrintf func(format string, a ...interface{}) (int, error)
+	// fmtFprintf is used to surface per-entry ListCommits errors on stderr.
+	// Defaults to fmt.Fprintf.
+	fmtFprintf func(w io.Writer, format string, a ...interface{}) (int, error)
 }
 
-func (s sshRemote) Type() (string, error) {
+// newSSHClient returns an sshClient wired with production defaults.
+func newSSHClient() *sshClient {
+	return &sshClient{
+		dial:         ssh.Dial,
+		run:          runCommand,
+		readPassword: term.ReadPassword,
+		fmtPrintf:    fmt.Printf,
+		fmtFprintf:   fmt.Fprintf,
+	}
+}
+
+func (s *sshClient) Type() (string, error) {
 	return "ssh", nil
 }
 
-func (s sshRemote) FromURL(rawURL string, additionalProperties map[string]string) (map[string]interface{}, error) {
+func (s *sshClient) FromURL(rawURL string, additionalProperties map[string]string) (map[string]interface{}, error) {
 	url, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -164,7 +202,7 @@ func getPort(port interface{}) (int, error) {
 	return portval, nil
 }
 
-func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]string, error) {
+func (s *sshClient) ToURL(properties map[string]interface{}) (string, map[string]string, error) {
 	u := fmt.Sprintf("ssh://%s", properties[propUsername])
 	if properties[propPassword] != nil {
 		u += ":*****"
@@ -204,13 +242,7 @@ func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]
 	return u, retProps, nil
 }
 
-var (
-	readPassword = term.ReadPassword
-	fmtPrintf    = fmt.Printf
-	fmtFprintf   = fmt.Fprintf
-)
-
-func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[string]interface{}, error) {
+func (s *sshClient) GetParameters(remoteProperties map[string]interface{}) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
 	if remoteProperties[propKeyFile] != nil {
@@ -228,9 +260,9 @@ func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[s
 	}
 
 	if remoteProperties[propPassword] == nil && remoteProperties[propKeyFile] == nil {
-		_, _ = fmtPrintf("password: ")
+		_, _ = s.fmtPrintf("password: ")
 
-		pw, err := readPassword(0)
+		pw, err := s.readPassword(0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read password: %w", err)
 		}
@@ -241,21 +273,38 @@ func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[s
 	return result, nil
 }
 
-func (s sshRemote) ValidateRemote(properties map[string]interface{}) error {
-	err := remote.ValidateFields(properties, []string{propUsername, propAddress, propPath}, []string{propPassword, propPort, propKeyFile})
+func (s *sshClient) ValidateRemote(properties map[string]interface{}) error {
+	err := remote.ValidateFields(
+		properties,
+		[]string{propUsername, propAddress, propPath},
+		[]string{propPassword, propPort, propKeyFile, propKnownHostsFile, propSkipHostCheck},
+	)
 	if err != nil {
 		return err
 	}
 
 	if port, ok := properties[propPort]; ok {
-		_, err := getPort(port)
-		return err
+		if _, err := getPort(port); err != nil {
+			return err
+		}
+	}
+
+	if v, ok := properties[propSkipHostCheck]; ok {
+		if _, err := coerceBoolean(propSkipHostCheck, v); err != nil {
+			return err
+		}
+	}
+
+	if v, ok := properties[propKnownHostsFile]; ok {
+		if _, err := coerceString(propKnownHostsFile, v); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (s sshRemote) ValidateParameters(parameters map[string]interface{}) error {
+func (s *sshClient) ValidateParameters(parameters map[string]interface{}) error {
 	return remote.ValidateFields(parameters, []string{}, []string{propPassword, propKey})
 }
 
@@ -288,17 +337,145 @@ func getAuth(properties map[string]interface{}, parameters map[string]interface{
 	return "", "", errors.New("one of password or key must be specified")
 }
 
-var dial = ssh.Dial
+const (
+	boolTrue  = "true"
+	boolFalse = "false"
+)
 
-func getConnection(properties map[string]interface{}, parameters map[string]interface{}) (*ssh.Client, error) {
+// coerceBoolean turns a JSON-deserialized value into a bool. Map[string]any
+// payloads can carry either a real bool (most parsers) or the literal strings
+// "true"/"false" (some serializers). Anything else is rejected so a typo like
+// "yes" cannot silently disable a security control.
+func coerceBoolean(name string, v interface{}) (bool, error) {
+	switch t := v.(type) {
+	case bool:
+		return t, nil
+	case string:
+		switch strings.ToLower(t) {
+		case boolTrue:
+			return true, nil
+		case boolFalse:
+			return false, nil
+		default:
+			return false, fmt.Errorf("'%s' must be a boolean (true/false), got %q", name, t)
+		}
+	default:
+		return false, fmt.Errorf("'%s' must be a boolean, got %T", name, v)
+	}
+}
+
+// defaultKnownHostsFile returns the OpenSSH default location for the
+// known_hosts file. Resolving the path at call time (not package init) lets
+// tests that override HOME continue to work.
+func defaultKnownHostsFile() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		// Fall back to a literal that will fail open-for-read with a clear
+		// message in the rejection path.
+		home = "~"
+	}
+
+	return filepath.Join(home, ".ssh", "known_hosts")
+}
+
+// buildHostKeyCallback resolves the host-key verification policy for a given
+// remote. The default is to verify against a known_hosts file (OpenSSH default
+// or the path supplied via propKnownHostsFile); the opt-out via
+// propSkipHostCheck preserves the legacy InsecureIgnoreHostKey behavior for
+// deployments on trusted networks where TOFU is acceptable.
+func buildHostKeyCallback(properties map[string]interface{}) (ssh.HostKeyCallback, error) {
+	if raw, ok := properties[propSkipHostCheck]; ok {
+		skip, err := coerceBoolean(propSkipHostCheck, raw)
+		if err != nil {
+			return nil, err
+		}
+
+		if skip {
+			// #nosec G106 -- explicit opt-out; documented escape hatch.
+			return ssh.InsecureIgnoreHostKey(), nil
+		}
+	}
+
+	knownHostsPath := defaultKnownHostsFile()
+	if raw, ok := properties[propKnownHostsFile]; ok {
+		s, err := coerceString(propKnownHostsFile, raw)
+		if err != nil {
+			return nil, err
+		}
+
+		knownHostsPath = s
+	}
+
+	addr, _ := properties[propAddress].(string)
+
+	return func(hostname string, remoteAddr net.Addr, key ssh.PublicKey) error {
+		cb, err := knownhosts.New(knownHostsPath)
+		if err != nil {
+			// A missing file is treated as "empty known_hosts": the host is
+			// unknown, so reject with the actionable guidance below.
+			if os.IsNotExist(err) {
+				return formatHostKeyError(addr, hostname, knownHostsPath, fmt.Errorf("known_hosts file %q not found", knownHostsPath))
+			}
+
+			return formatHostKeyError(addr, hostname, knownHostsPath, err)
+		}
+
+		if cbErr := cb(hostname, remoteAddr, key); cbErr != nil {
+			return formatHostKeyError(addr, hostname, knownHostsPath, cbErr)
+		}
+
+		return nil
+	}, nil
+}
+
+// coerceString is a typed-getter helper used at config parse time. The SDK's
+// ValidateFields only enforces key presence; we enforce string type here so a
+// bad caller sees a clean error instead of a runtime panic.
+func coerceString(name string, v interface{}) (string, error) {
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("'%s' must be a string, got %T", name, v)
+	}
+
+	return s, nil
+}
+
+// formatHostKeyError wraps the underlying verification failure in a message
+// that tells the operator exactly how to recover (ssh-keyscan command, the
+// known_hosts path) and how to opt out for trusted networks.
+func formatHostKeyError(configuredAddr, hostname, knownHostsPath string, underlying error) error {
+	displayHost := configuredAddr
+	if displayHost == "" {
+		displayHost = hostname
+	}
+
+	guidance := fmt.Sprintf(
+		"host key verification failed for %s\n\n"+
+			"Host '%s' is not in %s (or its key has changed)\n"+
+			"To accept the host, run:\n"+
+			"    ssh-keyscan -H '%s' >> '%s'\n"+
+			"Then verify the fingerprint out-of-band before retrying\n"+
+			"To skip host-key checking entirely (NOT recommended outside trusted networks), set `%s: true` on the remote",
+		displayHost, displayHost, knownHostsPath, displayHost, knownHostsPath, propSkipHostCheck,
+	)
+
+	return fmt.Errorf("%s: %w", guidance, underlying)
+}
+
+func (s *sshClient) getConnection(properties map[string]interface{}, parameters map[string]interface{}) (*ssh.Client, error) {
 	password, key, err := getAuth(properties, parameters)
+	if err != nil {
+		return nil, err
+	}
+
+	hostKeyCallback, err := buildHostKeyCallback(properties)
 	if err != nil {
 		return nil, err
 	}
 
 	config := &ssh.ClientConfig{
 		User:            properties[propUsername].(string),
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 -- Intentional for testing
+		HostKeyCallback: hostKeyCallback,
 	}
 
 	if key != "" {
@@ -312,7 +489,7 @@ func getConnection(properties map[string]interface{}, parameters map[string]inte
 		config.Auth = []ssh.AuthMethod{ssh.Password(password)}
 	}
 
-	return dial("tcp", properties[propAddress].(string), config)
+	return s.dial("tcp", properties[propAddress].(string), config)
 }
 
 func runCommand(conn *ssh.Client, command string) ([]byte, error) {
@@ -331,14 +508,12 @@ func runCommand(conn *ssh.Client, command string) ([]byte, error) {
 	return output, nil
 }
 
-var run = runCommand
-
-func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID string) (*remote.Commit, error) {
+func (s *sshClient) readCommit(conn *ssh.Client, properties map[string]interface{}, commitID string) (*remote.Commit, error) {
 	if err := validateCommitID(commitID); err != nil {
 		return nil, err
 	}
 
-	output, err := run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties[propPath], commitID))
+	output, err := s.run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties[propPath], commitID))
 	if err != nil {
 		return nil, err
 	}
@@ -353,15 +528,15 @@ func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID st
 	return &remote.Commit{ID: commitID, Properties: commit}, nil
 }
 
-func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map[string]interface{}, tags []remote.Tag) ([]remote.Commit, error) {
-	conn, err := getConnection(properties, parameters)
+func (s *sshClient) ListCommits(properties map[string]interface{}, parameters map[string]interface{}, tags []remote.Tag) ([]remote.Commit, error) {
+	conn, err := s.getConnection(properties, parameters)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() { _ = conn.Close() }()
 
-	output, err := run(conn, fmt.Sprintf("ls -1 \"%s\"", properties[propPath]))
+	output, err := s.run(conn, fmt.Sprintf("ls -1 \"%s\"", properties[propPath]))
 	if err != nil {
 		return nil, err
 	}
@@ -375,12 +550,12 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 			continue
 		}
 
-		commit, err := readCommit(conn, properties, commitID)
+		commit, err := s.readCommit(conn, properties, commitID)
 		if err != nil {
 			// A single bad entry shouldn't abort the listing (the directory may
 			// contain unrelated files), but the failure shouldn't be silent
 			// either — surface it via stderr so operators can investigate.
-			_, _ = fmtFprintf(os.Stderr, "ssh remote: skipping commit %q: %v\n", commitID, err)
+			_, _ = s.fmtFprintf(os.Stderr, "ssh remote: skipping commit %q: %v\n", commitID, err)
 			continue
 		}
 
@@ -394,17 +569,17 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 	return ret, nil
 }
 
-func (s sshRemote) GetCommit(properties map[string]interface{}, parameters map[string]interface{}, commitID string) (*remote.Commit, error) {
-	conn, err := getConnection(properties, parameters)
+func (s *sshClient) GetCommit(properties map[string]interface{}, parameters map[string]interface{}, commitID string) (*remote.Commit, error) {
+	conn, err := s.getConnection(properties, parameters)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() { _ = conn.Close() }()
 
-	return readCommit(conn, properties, commitID)
+	return s.readCommit(conn, properties, commitID)
 }
 
 func init() {
-	remote.Register(sshRemote{})
+	remote.Register(newSSHClient())
 }
