@@ -10,14 +10,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/datadatdat/remote-sdk-go/remote"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/term"
+	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/datadatdat/remote-sdk-go/remote"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"golang.org/x/term"
 )
 
 // commitIDPattern restricts commit identifiers to characters that are safe to
@@ -60,13 +64,15 @@ func stringOrError(m map[string]interface{}, key string) (string, error) {
 }
 
 const (
-	propKeyFile  = "keyFile"
-	propUsername = "username"
-	propAddress  = "address"
-	propPath     = "path"
-	propPort     = "port"
-	propPassword = "password"
-	propKey      = "key"
+	propKeyFile        = "keyFile"
+	propUsername       = "username"
+	propAddress        = "address"
+	propPath           = "path"
+	propPort           = "port"
+	propPassword       = "password"
+	propKey            = "key"
+	propKnownHostsFile = "known_hosts_file"
+	propSkipHostCheck  = "skip_host_check"
 )
 
 type sshRemote struct {
@@ -242,14 +248,31 @@ func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[s
 }
 
 func (s sshRemote) ValidateRemote(properties map[string]interface{}) error {
-	err := remote.ValidateFields(properties, []string{propUsername, propAddress, propPath}, []string{propPassword, propPort, propKeyFile})
+	err := remote.ValidateFields(
+		properties,
+		[]string{propUsername, propAddress, propPath},
+		[]string{propPassword, propPort, propKeyFile, propKnownHostsFile, propSkipHostCheck},
+	)
 	if err != nil {
 		return err
 	}
 
 	if port, ok := properties[propPort]; ok {
-		_, err := getPort(port)
-		return err
+		if _, err := getPort(port); err != nil {
+			return err
+		}
+	}
+
+	if v, ok := properties[propSkipHostCheck]; ok {
+		if _, err := coerceBoolean(propSkipHostCheck, v); err != nil {
+			return err
+		}
+	}
+
+	if v, ok := properties[propKnownHostsFile]; ok {
+		if _, err := coerceString(propKnownHostsFile, v); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -290,15 +313,145 @@ func getAuth(properties map[string]interface{}, parameters map[string]interface{
 
 var dial = ssh.Dial
 
+const (
+	boolTrue  = "true"
+	boolFalse = "false"
+)
+
+// coerceBoolean turns a JSON-deserialized value into a bool. Map[string]any
+// payloads can carry either a real bool (most parsers) or the literal strings
+// "true"/"false" (some serializers). Anything else is rejected so a typo like
+// "yes" cannot silently disable a security control.
+func coerceBoolean(name string, v interface{}) (bool, error) {
+	switch t := v.(type) {
+	case bool:
+		return t, nil
+	case string:
+		switch strings.ToLower(t) {
+		case boolTrue:
+			return true, nil
+		case boolFalse:
+			return false, nil
+		default:
+			return false, fmt.Errorf("'%s' must be a boolean (true/false), got %q", name, t)
+		}
+	default:
+		return false, fmt.Errorf("'%s' must be a boolean, got %T", name, v)
+	}
+}
+
+// defaultKnownHostsFile returns the OpenSSH default location for the
+// known_hosts file. Resolving the path at call time (not package init) lets
+// tests that override HOME continue to work.
+func defaultKnownHostsFile() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		// Fall back to a literal that will fail open-for-read with a clear
+		// message in the rejection path.
+		home = "~"
+	}
+
+	return filepath.Join(home, ".ssh", "known_hosts")
+}
+
+// buildHostKeyCallback resolves the host-key verification policy for a given
+// remote. The default is to verify against a known_hosts file (OpenSSH default
+// or the path supplied via propKnownHostsFile); the opt-out via
+// propSkipHostCheck preserves the legacy InsecureIgnoreHostKey behavior for
+// deployments on trusted networks where TOFU is acceptable.
+func buildHostKeyCallback(properties map[string]interface{}) (ssh.HostKeyCallback, error) {
+	if raw, ok := properties[propSkipHostCheck]; ok {
+		skip, err := coerceBoolean(propSkipHostCheck, raw)
+		if err != nil {
+			return nil, err
+		}
+
+		if skip {
+			// #nosec G106 -- explicit opt-out; documented escape hatch.
+			return ssh.InsecureIgnoreHostKey(), nil
+		}
+	}
+
+	knownHostsPath := defaultKnownHostsFile()
+	if raw, ok := properties[propKnownHostsFile]; ok {
+		s, err := coerceString(propKnownHostsFile, raw)
+		if err != nil {
+			return nil, err
+		}
+
+		knownHostsPath = s
+	}
+
+	addr, _ := properties[propAddress].(string)
+
+	return func(hostname string, remoteAddr net.Addr, key ssh.PublicKey) error {
+		cb, err := knownhosts.New(knownHostsPath)
+		if err != nil {
+			// A missing file is treated as "empty known_hosts": the host is
+			// unknown, so reject with the actionable guidance below.
+			if os.IsNotExist(err) {
+				return formatHostKeyError(addr, hostname, knownHostsPath, fmt.Errorf("known_hosts file %q not found", knownHostsPath))
+			}
+
+			return formatHostKeyError(addr, hostname, knownHostsPath, err)
+		}
+
+		if cbErr := cb(hostname, remoteAddr, key); cbErr != nil {
+			return formatHostKeyError(addr, hostname, knownHostsPath, cbErr)
+		}
+
+		return nil
+	}, nil
+}
+
+// coerceString is a typed-getter helper used at config parse time. The SDK's
+// ValidateFields only enforces key presence; we enforce string type here so a
+// bad caller sees a clean error instead of a runtime panic.
+func coerceString(name string, v interface{}) (string, error) {
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("'%s' must be a string, got %T", name, v)
+	}
+
+	return s, nil
+}
+
+// formatHostKeyError wraps the underlying verification failure in a message
+// that tells the operator exactly how to recover (ssh-keyscan command, the
+// known_hosts path) and how to opt out for trusted networks.
+func formatHostKeyError(configuredAddr, hostname, knownHostsPath string, underlying error) error {
+	displayHost := configuredAddr
+	if displayHost == "" {
+		displayHost = hostname
+	}
+
+	guidance := fmt.Sprintf(
+		"host key verification failed for %s\n\n"+
+			"Host '%s' is not in %s (or its key has changed)\n"+
+			"To accept the host, run:\n"+
+			"    ssh-keyscan -H '%s' >> '%s'\n"+
+			"Then verify the fingerprint out-of-band before retrying\n"+
+			"To skip host-key checking entirely (NOT recommended outside trusted networks), set `%s: true` on the remote",
+		displayHost, displayHost, knownHostsPath, displayHost, knownHostsPath, propSkipHostCheck,
+	)
+
+	return fmt.Errorf("%s: %w", guidance, underlying)
+}
+
 func getConnection(properties map[string]interface{}, parameters map[string]interface{}) (*ssh.Client, error) {
 	password, key, err := getAuth(properties, parameters)
 	if err != nil {
 		return nil, err
 	}
 
+	hostKeyCallback, err := buildHostKeyCallback(properties)
+	if err != nil {
+		return nil, err
+	}
+
 	config := &ssh.ClientConfig{
 		User:            properties[propUsername].(string),
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // #nosec G106 -- Intentional for testing
+		HostKeyCallback: hostKeyCallback,
 	}
 
 	if key != "" {
