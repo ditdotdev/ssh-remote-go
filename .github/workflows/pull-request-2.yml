@@ -201,6 +201,21 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     needs: [build-test]
+    # Spin up datadatdat/ssh-test-server alongside the job so the //go:build integration
+    # tests for runCommand actually run for real (instead of t.Skip-ing on connect refused).
+    # The image is rastasheep/ubuntu-sshd-based with root:root creds; the test defaults
+    # match those out of the box.
+    services:
+      ssh-test-server:
+        image: datadatdat/ssh-test-server:latest
+        ports:
+          - 12200:22
+        options: >-
+          --health-cmd "bash -c 'echo > /dev/tcp/127.0.0.1/22'"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+          --health-start-period 5s
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
