@@ -331,14 +331,14 @@ func TestGetConnectionUsesSecureCallbackByDefault(t *testing.T) {
 	require.NoError(t, os.WriteFile(emptyKH, []byte(""), 0600))
 
 	var capturedCfg *ssh.ClientConfig
-	origDial := dial
-	dial = func(_ string, _ string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	c := newTestClient()
+	c.dial = func(_ string, _ string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 		capturedCfg = cfg
 		return nil, nil
 	}
-	defer func() { dial = origDial }()
 
-	_, err := getConnection(
+	_, err := c.getConnection(
 		map[string]interface{}{
 			propUsername:       propUsername,
 			propAddress:        testLocalhost,
@@ -360,14 +360,14 @@ func TestGetConnectionUsesSecureCallbackByDefault(t *testing.T) {
 
 func TestGetConnectionUsesInsecureCallbackWhenSkipHostCheck(t *testing.T) {
 	var capturedCfg *ssh.ClientConfig
-	origDial := dial
-	dial = func(_ string, _ string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+
+	c := newTestClient()
+	c.dial = func(_ string, _ string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 		capturedCfg = cfg
 		return nil, nil
 	}
-	defer func() { dial = origDial }()
 
-	_, err := getConnection(
+	_, err := c.getConnection(
 		map[string]interface{}{
 			propUsername:      propUsername,
 			propAddress:       testLocalhost,

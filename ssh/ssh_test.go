@@ -5,15 +5,40 @@ package ssh
 
 import (
 	"errors"
-	"fmt"
-	"github.com/datadatdat/remote-sdk-go/remote"
-	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/term"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/datadatdat/remote-sdk-go/remote"
+	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/ssh"
 )
+
+// newTestClient returns a *sshClient pre-wired with no-op defaults that fail
+// loudly if exercised in the wrong direction. Tests that need a specific
+// collaborator (e.g., a fake dial, a stub run) override just that field on
+// the returned struct. This replaces the legacy pattern of mutating
+// package-level vars, which was incompatible with t.Parallel() and -race.
+func newTestClient() *sshClient {
+	return &sshClient{
+		dial: func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+			return nil, errors.New("dial not configured for this test")
+		},
+		run: func(_ *ssh.Client, _ string) ([]byte, error) {
+			return nil, errors.New("run not configured for this test")
+		},
+		readPassword: func(_ int) ([]byte, error) {
+			return nil, errors.New("readPassword not configured for this test")
+		},
+		fmtPrintf: func(_ string, _ ...interface{}) (int, error) {
+			return 0, nil
+		},
+		fmtFprintf: func(_ io.Writer, _ string, _ ...interface{}) (int, error) {
+			return 0, nil
+		},
+	}
+}
 
 const (
 	testPath    = "/path"
@@ -290,38 +315,27 @@ func TestBadKeyFileParameters(t *testing.T) {
 }
 
 func TestPasswordPrompt(t *testing.T) {
-	r, _ := remote.Get("ssh")
-	readPassword = func(_ int) (bytes []byte, err error) {
+	c := newTestClient()
+	c.readPassword = func(_ int) ([]byte, error) {
 		return []byte("pass"), nil
 	}
-	fmtPrintf = func(_ string, _ ...interface{}) (n int, err error) {
-		return 0, nil
-	}
 
-	props, err := r.GetParameters(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
+	props, err := c.GetParameters(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
 		propPath: testPath})
 	if assert.NoError(t, err) {
-		readPassword = term.ReadPassword
-		fmtPrintf = fmt.Printf
-
 		assert.Nil(t, props[propKey])
 		assert.Equal(t, "pass", props[propPassword])
 	}
 }
 
 func TestBadPasswordPrompt(t *testing.T) {
-	r, _ := remote.Get("ssh")
-	readPassword = func(_ int) (bytes []byte, err error) {
+	c := newTestClient()
+	c.readPassword = func(_ int) ([]byte, error) {
 		return []byte{}, errors.New("error")
 	}
-	fmtPrintf = func(_ string, _ ...interface{}) (n int, err error) {
-		return 0, nil
-	}
-	_, err := r.GetParameters(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
-		propPath: testPath})
-	readPassword = term.ReadPassword
-	fmtPrintf = fmt.Printf
 
+	_, err := c.GetParameters(map[string]interface{}{propUsername: propUsername, propAddress: testHost,
+		propPath: testPath})
 	assert.Error(t, err)
 }
 
@@ -433,12 +447,12 @@ func TestGetAuthMissing(t *testing.T) {
 }
 
 func TestGetConnBadAuth(t *testing.T) {
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, nil
 	}
-	_, err := getConnection(map[string]interface{}{}, map[string]interface{}{})
-	dial = ssh.Dial
 
+	_, err := c.getConnection(map[string]interface{}{}, map[string]interface{}{})
 	assert.Error(t, err)
 }
 
@@ -447,21 +461,20 @@ func TestGetConnPassword(t *testing.T) {
 
 	var config *ssh.ClientConfig
 
-	dial = func(_ string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 		host = addr
 		config = cfg
 
 		return nil, nil
 	}
 
-	_, err := getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
+	_, err := c.getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
 		map[string]interface{}{propPassword: propPassword})
 	if assert.NoError(t, err) {
 		assert.Equal(t, propAddress, host)
 		assert.Equal(t, propUsername, config.User)
 	}
-
-	dial = ssh.Dial
 }
 
 func TestGetConnKey(t *testing.T) {
@@ -498,33 +511,31 @@ qXdXtd+SfLRrfCd1KJRp8NFIPFsk0T3iy8hxZJZSHtM6/nwM3p2rHw==
 
 	var config *ssh.ClientConfig
 
-	dial = func(_ string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 		host = addr
 		config = cfg
 
 		return nil, nil
 	}
 
-	_, err := getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
+	_, err := c.getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
 		map[string]interface{}{propKey: key})
 	if assert.NoError(t, err) {
 		assert.Equal(t, propAddress, host)
 		assert.Equal(t, propUsername, config.User)
 	}
-
-	dial = ssh.Dial
 }
 
 func TestGetConnBadKey(t *testing.T) {
-	key := "notakey"
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, nil
 	}
-	_, err := getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
-		map[string]interface{}{propKey: key})
-	assert.Error(t, err)
 
-	dial = ssh.Dial
+	_, err := c.getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
+		map[string]interface{}{propKey: "notakey"})
+	assert.Error(t, err)
 }
 
 func TestGetCommit(t *testing.T) {
@@ -532,17 +543,16 @@ func TestGetCommit(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, command string) ([]byte, error) {
 		remoteCommand = command
 		return []byte("{\"a\": \"b\", \"c\": {\"d\": \"e\"}}"), nil
 	}
 
-	r, _ := remote.Get("ssh")
-
-	commit, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+	commit, err := c.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
 	if assert.NoError(t, err) {
 		assert.Equal(t, "cat \"/path/id/metadata.json\"", remoteCommand)
@@ -551,100 +561,90 @@ func TestGetCommit(t *testing.T) {
 		props := commit.Properties["c"].(map[string]interface{})
 		assert.Equal(t, "e", props["d"])
 	}
-
-	run = runCommand
-	dial = ssh.Dial
 }
 
 func TestGetCommitBadJson(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, _ string) ([]byte, error) {
 		return []byte(testFoo), nil
 	}
-	r, _ := remote.Get("ssh")
-	_, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+
+	_, err := c.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
 	assert.Error(t, err)
-
-	run = runCommand
-	dial = ssh.Dial
 }
 
 func TestGetCommitRunFail(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, _ string) ([]byte, error) {
 		return nil, errors.New("error")
 	}
-	r, _ := remote.Get("ssh")
-	_, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+
+	_, err := c.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
 	assert.Error(t, err)
-
-	run = runCommand
-	dial = ssh.Dial
 }
 
 func TestGetCommitBadConn(t *testing.T) {
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, errors.New("error")
 	}
-	r, _ := remote.Get("ssh")
-	_, err := r.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+
+	_, err := c.GetCommit(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, "id")
 	assert.Error(t, err)
-
-	dial = ssh.Dial
 }
 
 func TestListCommitsBadConn(t *testing.T) {
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return nil, errors.New("error")
 	}
-	r, _ := remote.Get("ssh")
-	_, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+
+	_, err := c.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{})
 	assert.Error(t, err)
-
-	dial = ssh.Dial
 }
 
 func TestListCommitsRunFail(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, _ string) ([]byte, error) {
 		return nil, errors.New("error")
 	}
-	r, _ := remote.Get("ssh")
-	_, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+
+	_, err := c.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{})
 	assert.Error(t, err)
-
-	run = runCommand
-	dial = ssh.Dial
 }
 
 func TestListCommits(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, command string) ([]byte, error) {
 		if command == testLsPath {
 			return []byte("one\ntwo\n"), nil
 		}
@@ -660,28 +660,24 @@ func TestListCommits(t *testing.T) {
 		return nil, errors.New("error")
 	}
 
-	r, _ := remote.Get("ssh")
-
-	commits, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+	commits, err := c.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{})
 	if assert.NoError(t, err) {
 		assert.Len(t, commits, 2)
 		assert.Equal(t, "two", commits[0].ID)
 		assert.Equal(t, "one", commits[1].ID)
 	}
-
-	run = runCommand
-	dial = ssh.Dial
 }
 
 func TestListCommitsTags(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, command string) ([]byte, error) {
 		if command == testLsPath {
 			return []byte("one\ntwo\n"), nil
 		}
@@ -697,17 +693,12 @@ func TestListCommitsTags(t *testing.T) {
 		return nil, errors.New("error")
 	}
 
-	r, _ := remote.Get("ssh")
-
-	commits, err := r.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
+	commits, err := c.ListCommits(map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword}, []remote.Tag{{Key: "a"}})
 	if assert.NoError(t, err) {
 		assert.Len(t, commits, 1)
 		assert.Equal(t, "one", commits[0].ID)
 	}
-
-	run = runCommand
-	dial = ssh.Dial
 }
 
 // --- Issue #1: command injection via unvalidated commitID ---
@@ -719,21 +710,16 @@ func TestGetCommitRejectsMaliciousCommitID(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, _ string) ([]byte, error) {
 		runCalled = true
 		return []byte("{}"), nil
 	}
 
-	defer func() {
-		run = runCommand
-		dial = ssh.Dial
-	}()
-
-	r, _ := remote.Get("ssh")
-	_, err := r.GetCommit(
+	_, err := c.GetCommit(
 		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword},
 		`id"; cat /etc/passwd; echo "`,
@@ -751,10 +737,11 @@ func TestListCommitsRejectsMaliciousCommitID(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, command string) ([]byte, error) {
 		commands = append(commands, command)
 		if command == testLsPath {
 			// First entry is malicious, second is legitimate.
@@ -768,13 +755,7 @@ func TestListCommitsRejectsMaliciousCommitID(t *testing.T) {
 		return nil, errors.New("unexpected command")
 	}
 
-	defer func() {
-		run = runCommand
-		dial = ssh.Dial
-	}()
-
-	r, _ := remote.Get("ssh")
-	commits, err := r.ListCommits(
+	commits, err := c.ListCommits(
 		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword},
 		[]remote.Tag{},
@@ -796,20 +777,15 @@ func TestGetCommitValidCommitIDCharacters(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, _ string) ([]byte, error) {
 		return []byte("{}"), nil
 	}
 
-	defer func() {
-		run = runCommand
-		dial = ssh.Dial
-	}()
-
-	r, _ := remote.Get("ssh")
-	_, err := r.GetCommit(
+	_, err := c.GetCommit(
 		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword},
 		"abc123.DEF_456-789",
@@ -822,21 +798,16 @@ func TestGetCommitEmptyCommitIDRejected(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, _ string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, _ string) ([]byte, error) {
 		runCalled = true
 		return []byte("{}"), nil
 	}
 
-	defer func() {
-		run = runCommand
-		dial = ssh.Dial
-	}()
-
-	r, _ := remote.Get("ssh")
-	_, err := r.GetCommit(
+	_, err := c.GetCommit(
 		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword},
 		"",
@@ -916,10 +887,11 @@ func TestListCommitsSkipsBlankLines(t *testing.T) {
 	conn := new(MockConn)
 	conn.On("Close").Return(nil)
 
-	dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
+	c := newTestClient()
+	c.dial = func(_ string, _ string, _ *ssh.ClientConfig) (*ssh.Client, error) {
 		return &ssh.Client{Conn: conn}, nil
 	}
-	run = func(_ *ssh.Client, command string) (bytes []byte, err error) {
+	c.run = func(_ *ssh.Client, command string) ([]byte, error) {
 		if command == testLsPath {
 			return []byte("\n\nrealid\n\n"), nil
 		}
@@ -931,13 +903,7 @@ func TestListCommitsSkipsBlankLines(t *testing.T) {
 		return nil, errors.New("unexpected command")
 	}
 
-	defer func() {
-		run = runCommand
-		dial = ssh.Dial
-	}()
-
-	r, _ := remote.Get("ssh")
-	commits, err := r.ListCommits(
+	commits, err := c.ListCommits(
 		map[string]interface{}{propUsername: propUsername, propAddress: propAddress, propPath: testPath},
 		map[string]interface{}{propPassword: propPassword},
 		[]remote.Tag{},

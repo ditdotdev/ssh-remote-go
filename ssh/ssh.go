@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -75,14 +76,45 @@ const (
 	propSkipHostCheck  = "skip_host_check"
 )
 
-type sshRemote struct {
+// sshClient is the SSH remote provider with all its side-effecting collaborators
+// (network dial, SSH command execution, password prompt I/O, error reporting)
+// injected as function values. Tests construct an sshClient with their own
+// mocks; production code uses newSSHClient() which wires the real
+// implementations. This replaces the package-level mutable vars
+// (`dial`, `run`, `readPassword`, `fmtPrintf`, `fmtFprintf`) the legacy test
+// suite used for mocking — those were incompatible with t.Parallel() and -race.
+type sshClient struct {
+	// dial opens a TCP+SSH connection. Defaults to ssh.Dial.
+	dial func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error)
+	// run executes a single command over an established SSH connection.
+	// Defaults to runCommand.
+	run func(conn *ssh.Client, command string) ([]byte, error)
+	// readPassword reads a password from a terminal fd without echoing.
+	// Defaults to term.ReadPassword.
+	readPassword func(fd int) ([]byte, error)
+	// fmtPrintf writes a prompt to stdout. Defaults to fmt.Printf.
+	fmtPrintf func(format string, a ...interface{}) (int, error)
+	// fmtFprintf is used to surface per-entry ListCommits errors on stderr.
+	// Defaults to fmt.Fprintf.
+	fmtFprintf func(w io.Writer, format string, a ...interface{}) (int, error)
 }
 
-func (s sshRemote) Type() (string, error) {
+// newSSHClient returns an sshClient wired with production defaults.
+func newSSHClient() *sshClient {
+	return &sshClient{
+		dial:         ssh.Dial,
+		run:          runCommand,
+		readPassword: term.ReadPassword,
+		fmtPrintf:    fmt.Printf,
+		fmtFprintf:   fmt.Fprintf,
+	}
+}
+
+func (s *sshClient) Type() (string, error) {
 	return "ssh", nil
 }
 
-func (s sshRemote) FromURL(rawURL string, additionalProperties map[string]string) (map[string]interface{}, error) {
+func (s *sshClient) FromURL(rawURL string, additionalProperties map[string]string) (map[string]interface{}, error) {
 	url, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, err
@@ -170,7 +202,7 @@ func getPort(port interface{}) (int, error) {
 	return portval, nil
 }
 
-func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]string, error) {
+func (s *sshClient) ToURL(properties map[string]interface{}) (string, map[string]string, error) {
 	u := fmt.Sprintf("ssh://%s", properties[propUsername])
 	if properties[propPassword] != nil {
 		u += ":*****"
@@ -210,13 +242,7 @@ func (s sshRemote) ToURL(properties map[string]interface{}) (string, map[string]
 	return u, retProps, nil
 }
 
-var (
-	readPassword = term.ReadPassword
-	fmtPrintf    = fmt.Printf
-	fmtFprintf   = fmt.Fprintf
-)
-
-func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[string]interface{}, error) {
+func (s *sshClient) GetParameters(remoteProperties map[string]interface{}) (map[string]interface{}, error) {
 	result := map[string]interface{}{}
 
 	if remoteProperties[propKeyFile] != nil {
@@ -234,9 +260,9 @@ func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[s
 	}
 
 	if remoteProperties[propPassword] == nil && remoteProperties[propKeyFile] == nil {
-		_, _ = fmtPrintf("password: ")
+		_, _ = s.fmtPrintf("password: ")
 
-		pw, err := readPassword(0)
+		pw, err := s.readPassword(0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read password: %w", err)
 		}
@@ -247,7 +273,7 @@ func (s sshRemote) GetParameters(remoteProperties map[string]interface{}) (map[s
 	return result, nil
 }
 
-func (s sshRemote) ValidateRemote(properties map[string]interface{}) error {
+func (s *sshClient) ValidateRemote(properties map[string]interface{}) error {
 	err := remote.ValidateFields(
 		properties,
 		[]string{propUsername, propAddress, propPath},
@@ -278,7 +304,7 @@ func (s sshRemote) ValidateRemote(properties map[string]interface{}) error {
 	return nil
 }
 
-func (s sshRemote) ValidateParameters(parameters map[string]interface{}) error {
+func (s *sshClient) ValidateParameters(parameters map[string]interface{}) error {
 	return remote.ValidateFields(parameters, []string{}, []string{propPassword, propKey})
 }
 
@@ -310,8 +336,6 @@ func getAuth(properties map[string]interface{}, parameters map[string]interface{
 
 	return "", "", errors.New("one of password or key must be specified")
 }
-
-var dial = ssh.Dial
 
 const (
 	boolTrue  = "true"
@@ -438,7 +462,7 @@ func formatHostKeyError(configuredAddr, hostname, knownHostsPath string, underly
 	return fmt.Errorf("%s: %w", guidance, underlying)
 }
 
-func getConnection(properties map[string]interface{}, parameters map[string]interface{}) (*ssh.Client, error) {
+func (s *sshClient) getConnection(properties map[string]interface{}, parameters map[string]interface{}) (*ssh.Client, error) {
 	password, key, err := getAuth(properties, parameters)
 	if err != nil {
 		return nil, err
@@ -465,7 +489,7 @@ func getConnection(properties map[string]interface{}, parameters map[string]inte
 		config.Auth = []ssh.AuthMethod{ssh.Password(password)}
 	}
 
-	return dial("tcp", properties[propAddress].(string), config)
+	return s.dial("tcp", properties[propAddress].(string), config)
 }
 
 func runCommand(conn *ssh.Client, command string) ([]byte, error) {
@@ -484,14 +508,12 @@ func runCommand(conn *ssh.Client, command string) ([]byte, error) {
 	return output, nil
 }
 
-var run = runCommand
-
-func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID string) (*remote.Commit, error) {
+func (s *sshClient) readCommit(conn *ssh.Client, properties map[string]interface{}, commitID string) (*remote.Commit, error) {
 	if err := validateCommitID(commitID); err != nil {
 		return nil, err
 	}
 
-	output, err := run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties[propPath], commitID))
+	output, err := s.run(conn, fmt.Sprintf("cat \"%s/%s/metadata.json\"", properties[propPath], commitID))
 	if err != nil {
 		return nil, err
 	}
@@ -506,15 +528,15 @@ func readCommit(conn *ssh.Client, properties map[string]interface{}, commitID st
 	return &remote.Commit{ID: commitID, Properties: commit}, nil
 }
 
-func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map[string]interface{}, tags []remote.Tag) ([]remote.Commit, error) {
-	conn, err := getConnection(properties, parameters)
+func (s *sshClient) ListCommits(properties map[string]interface{}, parameters map[string]interface{}, tags []remote.Tag) ([]remote.Commit, error) {
+	conn, err := s.getConnection(properties, parameters)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() { _ = conn.Close() }()
 
-	output, err := run(conn, fmt.Sprintf("ls -1 \"%s\"", properties[propPath]))
+	output, err := s.run(conn, fmt.Sprintf("ls -1 \"%s\"", properties[propPath]))
 	if err != nil {
 		return nil, err
 	}
@@ -528,12 +550,12 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 			continue
 		}
 
-		commit, err := readCommit(conn, properties, commitID)
+		commit, err := s.readCommit(conn, properties, commitID)
 		if err != nil {
 			// A single bad entry shouldn't abort the listing (the directory may
 			// contain unrelated files), but the failure shouldn't be silent
 			// either — surface it via stderr so operators can investigate.
-			_, _ = fmtFprintf(os.Stderr, "ssh remote: skipping commit %q: %v\n", commitID, err)
+			_, _ = s.fmtFprintf(os.Stderr, "ssh remote: skipping commit %q: %v\n", commitID, err)
 			continue
 		}
 
@@ -547,17 +569,17 @@ func (s sshRemote) ListCommits(properties map[string]interface{}, parameters map
 	return ret, nil
 }
 
-func (s sshRemote) GetCommit(properties map[string]interface{}, parameters map[string]interface{}, commitID string) (*remote.Commit, error) {
-	conn, err := getConnection(properties, parameters)
+func (s *sshClient) GetCommit(properties map[string]interface{}, parameters map[string]interface{}, commitID string) (*remote.Commit, error) {
+	conn, err := s.getConnection(properties, parameters)
 	if err != nil {
 		return nil, err
 	}
 
 	defer func() { _ = conn.Close() }()
 
-	return readCommit(conn, properties, commitID)
+	return s.readCommit(conn, properties, commitID)
 }
 
 func init() {
-	remote.Register(sshRemote{})
+	remote.Register(newSSHClient())
 }
