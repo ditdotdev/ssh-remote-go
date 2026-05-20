@@ -3,8 +3,8 @@ github.com/bufbuild/protocompile v0.14.1/go.mod h1:ppVdAIhbr2H8asPk6k4pY7t9zB1OU
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
-github.com/datadatdat/remote-sdk-go v1.10.0 h1:txlhLYjHKdrea4/AOCV9UowC3JIoU05BuHtRHgRv18s=
-github.com/datadatdat/remote-sdk-go v1.10.0/go.mod h1:dWq96uP2wfHTsBLAVvUsVQ9zyCPTahoP6ept3QtbjPc=
+github.com/datadatdat/remote-sdk-go v1.11.0 h1:dQBqFTyXoLwEX8ARmn/3zK3yPST+VY3FTGvw+Pxo+5w=
+github.com/datadatdat/remote-sdk-go v1.11.0/go.mod h1:dWq96uP2wfHTsBLAVvUsVQ9zyCPTahoP6ept3QtbjPc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
