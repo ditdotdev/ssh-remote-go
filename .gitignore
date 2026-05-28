@@ -13,3 +13,7 @@
 # Test coverage
 coverage.out
 coverage.html
+
+# Coverage profiles + local repo-health output
+cov*.out
+.health/
