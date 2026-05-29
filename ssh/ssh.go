@@ -65,15 +65,19 @@ func stringOrError(m map[string]interface{}, key string) (string, error) {
 }
 
 const (
-	propKeyFile        = "keyFile"
-	propUsername       = "username"
-	propAddress        = "address"
-	propPath           = "path"
-	propPort           = "port"
-	propPassword       = "password"
-	propKey            = "key"
-	propKnownHostsFile = "known_hosts_file"
-	propSkipHostCheck  = "skip_host_check"
+	propKeyFile  = "keyFile"
+	propUsername = "username"
+	propAddress  = "address"
+	propPath     = "path"
+	propPort     = "port"
+	propPassword = "password"
+	propKey      = "key"
+	// camelCase to match the rest of the ecosystem (keyFile above, the Kotlin
+	// ssh-remote server, and the CLI). These properties are stored on the
+	// remote by the server, so the names must agree across the Go/Kotlin
+	// boundary or the opt-out is silently ignored.
+	propKnownHostsFile = "knownHostsFile"
+	propSkipHostCheck  = "skipHostCheck"
 )
 
 // sshClient is the SSH remote provider with all its side-effecting collaborators
@@ -149,7 +153,10 @@ func (s *sshClient) FromURL(rawURL string, additionalProperties map[string]strin
 	}
 
 	for k := range additionalProperties {
-		if k != propKeyFile {
+		switch k {
+		case propKeyFile, propSkipHostCheck, propKnownHostsFile:
+			// allowed
+		default:
 			return nil, fmt.Errorf("invalid remote property '%s'", k)
 		}
 	}
@@ -175,6 +182,17 @@ func (s *sshClient) FromURL(rawURL string, additionalProperties map[string]strin
 
 	if keyFile != "" {
 		result[propKeyFile] = keyFile
+	}
+
+	// Forward host-key options to the server, which stores them on the remote
+	// and honors them on push/pull. Values stay as supplied (e.g. the string
+	// "true"); validateRemote/the server coerce skipHostCheck to a Boolean.
+	if v, ok := additionalProperties[propSkipHostCheck]; ok {
+		result[propSkipHostCheck] = v
+	}
+
+	if v, ok := additionalProperties[propKnownHostsFile]; ok {
+		result[propKnownHostsFile] = v
 	}
 
 	return result, nil
