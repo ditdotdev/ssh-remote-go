@@ -98,7 +98,7 @@ func TestBuildHostKeyCallbackRejectsUnknownHostWithGuidance(t *testing.T) {
 	assert.Contains(t, msg, testRemoteHost, "error must name the host")
 	assert.Contains(t, msg, khPath, "error must reference the known_hosts file")
 	assert.Contains(t, msg, "ssh-keyscan", "error must mention ssh-keyscan recovery")
-	assert.Contains(t, msg, "skip_host_check", "error must mention the opt-out knob")
+	assert.Contains(t, msg, "skipHostCheck", "error must mention the opt-out knob")
 }
 
 func TestBuildHostKeyCallbackSkipHostCheckBool(t *testing.T) {
@@ -112,7 +112,7 @@ func TestBuildHostKeyCallbackSkipHostCheckBool(t *testing.T) {
 	// With skip enabled, ANY key on ANY host is accepted (the legacy behavior).
 	anyKey := generateTestHostKey(t)
 	err = cb("anything", fakeAddr{s: testWildcardAddr}, anyKey)
-	assert.NoError(t, err, "skip_host_check=true must accept any host key")
+	assert.NoError(t, err, "skipHostCheck=true must accept any host key")
 }
 
 func TestBuildHostKeyCallbackSkipHostCheckStringTrue(t *testing.T) {
@@ -124,7 +124,7 @@ func TestBuildHostKeyCallbackSkipHostCheckStringTrue(t *testing.T) {
 
 	anyKey := generateTestHostKey(t)
 	err = cb("anything", fakeAddr{s: testWildcardAddr}, anyKey)
-	assert.NoError(t, err, "skip_host_check=\"true\" string must be coerced to bool true")
+	assert.NoError(t, err, "skipHostCheck=\"true\" string must be coerced to bool true")
 }
 
 func TestBuildHostKeyCallbackSkipHostCheckStringFalseIsSecure(t *testing.T) {
@@ -141,7 +141,7 @@ func TestBuildHostKeyCallbackSkipHostCheckStringFalseIsSecure(t *testing.T) {
 	// "false" string must NOT disable verification: a wrong key is rejected.
 	wrong := generateTestHostKey(t)
 	err = cb(testLocalhostAddr, fakeAddr{s: testLocalhostAddr}, wrong)
-	assert.Error(t, err, "skip_host_check=\"false\" must keep verification on")
+	assert.Error(t, err, "skipHostCheck=\"false\" must keep verification on")
 }
 
 func TestBuildHostKeyCallbackCustomKnownHostsFile(t *testing.T) {
@@ -227,7 +227,7 @@ func TestFormatHostKeyErrorFallsBackToHostname(t *testing.T) {
 	assert.Contains(t, err.Error(), "fallback.example.com:22")
 }
 
-// --- validateRemote: accepts skip_host_check + known_hosts_file ---
+// --- validateRemote: accepts skipHostCheck + knownHostsFile ---
 
 func TestValidateRemoteAcceptsSkipHostCheckBool(t *testing.T) {
 	r, _ := remote.Get("ssh")
@@ -238,7 +238,7 @@ func TestValidateRemoteAcceptsSkipHostCheckBool(t *testing.T) {
 			propPath:          testPath,
 			propSkipHostCheck: v,
 		})
-		assert.NoError(t, err, "skip_host_check=%v must be accepted", v)
+		assert.NoError(t, err, "skipHostCheck=%v must be accepted", v)
 	}
 }
 
@@ -251,7 +251,7 @@ func TestValidateRemoteAcceptsSkipHostCheckString(t *testing.T) {
 			propPath:          testPath,
 			propSkipHostCheck: v,
 		})
-		assert.NoError(t, err, "skip_host_check=%q must be accepted", v)
+		assert.NoError(t, err, "skipHostCheck=%q must be accepted", v)
 	}
 }
 
@@ -267,9 +267,9 @@ func TestValidateRemoteRejectsSkipHostCheckGarbage(t *testing.T) {
 			propPath:          testPath,
 			propSkipHostCheck: v,
 		})
-		assert.Error(t, err, "skip_host_check=%v (type %T) must be rejected", v, v)
+		assert.Error(t, err, "skipHostCheck=%v (type %T) must be rejected", v, v)
 		if err != nil {
-			assert.Contains(t, strings.ToLower(err.Error()), "skip_host_check")
+			assert.Contains(t, strings.ToLower(err.Error()), "skiphostcheck")
 		}
 	}
 }
@@ -382,5 +382,5 @@ func TestGetConnectionUsesInsecureCallbackWhenSkipHostCheck(t *testing.T) {
 	// legacy InsecureIgnoreHostKey behavior).
 	key := generateTestHostKey(t)
 	cbErr := capturedCfg.HostKeyCallback("anything", fakeAddr{s: testWildcardAddr}, key)
-	assert.NoError(t, cbErr, "skip_host_check=true must accept any host key")
+	assert.NoError(t, cbErr, "skipHostCheck=true must accept any host key")
 }
