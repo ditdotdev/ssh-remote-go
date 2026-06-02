@@ -1,8 +1,8 @@
 /*
- * Copyright Datadatdat.
+ * Copyright Dit.
  */
 
-// Package ssh provides SSH remote backend functionality for Datadatdat data storage.
+// Package ssh provides SSH remote backend functionality for Dit data storage.
 package ssh
 
 import (
@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/datadatdat/remote-sdk-go/remote"
+	"github.com/ditdotdev/remote-sdk-go/remote"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
