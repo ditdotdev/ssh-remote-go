@@ -18,9 +18,9 @@ on:
 
 env:
   GO_VERSION: '1.26.2'
-  GOPRIVATE: github.com/datadatdat/*
-  GONOPROXY: github.com/datadatdat/*
-  GONOSUMDB: github.com/datadatdat/*
+  GOPRIVATE: github.com/ditdotdev/*
+  GONOPROXY: github.com/ditdotdev/*
+  GONOSUMDB: github.com/ditdotdev/*
   GOPROXY: https://proxy.golang.org,direct
   GIT_TERMINAL_PROMPT: 0
 
@@ -154,9 +154,9 @@ jobs:
 
       - name: Configure Go environment
         run: |
-          go env -w GOPRIVATE=github.com/datadatdat/*
-          go env -w GONOPROXY=github.com/datadatdat/*
-          go env -w GONOSUMDB=github.com/datadatdat/*
+          go env -w GOPRIVATE=github.com/ditdotdev/*
+          go env -w GONOPROXY=github.com/ditdotdev/*
+          go env -w GONOSUMDB=github.com/ditdotdev/*
           go env -w GOPROXY=https://proxy.golang.org,direct
 
       - name: Download dependencies
@@ -201,13 +201,13 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
     needs: [build-test]
-    # Spin up datadatdat/ssh-test-server alongside the job so the //go:build integration
+    # Spin up ditdotdev/ssh-test-server alongside the job so the //go:build integration
     # tests for runCommand actually run for real (instead of t.Skip-ing on connect refused).
     # The image is rastasheep/ubuntu-sshd-based with root:root creds; the test defaults
     # match those out of the box.
     services:
       ssh-test-server:
-        image: datadatdat/ssh-test-server:latest
+        image: datadatdat/ssh-test-server:latest  # TODO(dit): flip to ditdotdev/ after image republished (ditdotdev/ssh-test-server#1)
         ports:
           - 12200:22
         options: >-

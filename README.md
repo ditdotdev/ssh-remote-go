@@ -1,7 +1,7 @@
-# Datadatdat SSH Provider
+# Dit SSH Provider
 
-This is a basic Datadatdat SSH provider. For more information on how it works,
-consult the datadatdat documentation.
+This is a basic Dit SSH provider. For more information on how it works,
+consult the dit documentation.
 
 ## Remote configuration
 
@@ -73,7 +73,7 @@ every SSH connection. To upgrade without service interruption:
    the flag.
 
 This change mirrors the policy shipped in the Kotlin provider
-([ssh-remote#62](https://github.com/datadatdat/ssh-remote/pull/62)).
+([ssh-remote#62](https://github.com/ditdotdev/ssh-remote/pull/62)).
 
 ## CI/CD Pipeline
 
@@ -85,13 +85,13 @@ This repository includes a comprehensive Pull Request 2 workflow with:
 
 ## Contributing
 
-This project follows the Datadatdat community best practices:
+This project follows the Dit community best practices:
 
-  * [Contributing](https://github.com/datadatdat/.github/blob/master/CONTRIBUTING.md)
-  * [Code of Conduct](https://github.com/datadatdat/.github/blob/master/CODE_OF_CONDUCT.md)
-  * [Community Support](https://github.com/datadatdat/.github/blob/master/SUPPORT.md)
+  * [Contributing](https://github.com/ditdotdev/.github/blob/master/CONTRIBUTING.md)
+  * [Code of Conduct](https://github.com/ditdotdev/.github/blob/master/CODE_OF_CONDUCT.md)
+  * [Community Support](https://github.com/ditdotdev/.github/blob/master/SUPPORT.md)
 
-It is maintained by the [Datadatdat community maintainers](https://github.com/datadatdat/.github/blob/master/MAINTAINERS.md)
+It is maintained by the [Dit community maintainers](https://github.com/ditdotdev/.github/blob/master/MAINTAINERS.md)
 
 For more information on how it works, and how to build and release new versions,
 see the [Development Guidelines](DEVELOPING.md).

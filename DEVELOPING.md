@@ -1,12 +1,12 @@
 # Project Development
 
 For general information about contributing changes, see the
-[Contributor Guidelines](https://github.com/datadatdat/.github/blob/master/CONTRIBUTING.md).
+[Contributor Guidelines](https://github.com/ditdotdev/.github/blob/master/CONTRIBUTING.md).
 
 ## How it Works
 
-The provider uses the Datadatdat `remote-sdk-go` to provide interfaces for
-Datadatdat to use.
+The provider uses the Dit `remote-sdk-go` to provide interfaces for
+Dit to use.
 
 ## Building
 
@@ -26,7 +26,7 @@ Start the test server, run the suite, then clean up:
 
 ```bash
 docker run -d --rm --name ssh-remote-go-itest -p 12200:22 \
-    datadatdat/ssh-test-server:latest
+    ditdotdev/ssh-test-server:latest
 go test -tags=integration ./ssh/
 docker rm -f ssh-remote-go-itest
 ```

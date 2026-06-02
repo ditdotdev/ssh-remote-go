@@ -26,12 +26,12 @@ jobs:
       - name: Build
         run: go build -v ./...
         env:
-          GOPRIVATE: github.com/datadatdat/*
+          GOPRIVATE: github.com/ditdotdev/*
       - name: Build command
         run: go build -o build/ssh ./cmd/ssh
         env:
-          GOPRIVATE: github.com/datadatdat/*
+          GOPRIVATE: github.com/ditdotdev/*
       - name: Test
         run: go test -v ./...
         env:
-          GOPRIVATE: github.com/datadatdat/*
+          GOPRIVATE: github.com/ditdotdev/*
