@@ -207,7 +207,7 @@ jobs:
     # match those out of the box.
     services:
       ssh-test-server:
-        image: ditdotdev/ssh-test-server:latest
+        image: datadatdat/ssh-test-server:latest  # TODO(dit): flip to ditdotdev/ after image republished (ditdotdev/ssh-test-server#1)
         ports:
           - 12200:22
         options: >-
