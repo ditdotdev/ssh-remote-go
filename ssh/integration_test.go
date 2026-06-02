@@ -1,7 +1,7 @@
 //go:build integration
 
 /*
- * Copyright Datadatdat.
+ * Copyright Dit.
  */
 
 // Package ssh integration tests exercise the real runCommand against a live
@@ -11,7 +11,7 @@
 // Run with:
 //
 //	docker run -d --rm --name ssh-remote-go-itest -p 12200:22 \
-//	    datadatdat/ssh-test-server:latest
+//	    ditdotdev/ssh-test-server:latest
 //	go test -tags=integration ./ssh/ -run TestRunCommandIntegration
 //	docker rm -f ssh-remote-go-itest
 //
@@ -54,9 +54,9 @@ func dialIntegrationSSH(t *testing.T) *ssh.Client {
 
 	client, err := ssh.Dial("tcp", host+":"+port, config)
 	if err != nil {
-		// CI spins up datadatdat/ssh-test-server as a service container in the Integration Tests
+		// CI spins up ditdotdev/ssh-test-server as a service container in the Integration Tests
 		// job, so this skip should never fire there. Locally, run
-		//   docker run -d --rm --name ssh-remote-go-itest -p 12200:22 datadatdat/ssh-test-server:latest
+		//   docker run -d --rm --name ssh-remote-go-itest -p 12200:22 ditdotdev/ssh-test-server:latest
 		// before invoking `go test -tags=integration`. Skip gracefully when unreachable so the same
 		// test file works on developer laptops without docker too.
 		t.Skipf("ssh-test-server not reachable at %s:%s (%v); skipping integration test", host, port, err)
