@@ -7,8 +7,8 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/ditdotdev/remote-sdk-go v1.9.3 h1:/igtYiq1zfO4cB4L/sA+CnKN3NOLbvgo5AkDOqtYlBM=
-github.com/ditdotdev/remote-sdk-go v1.9.3/go.mod h1:zyQQJgtOf6R5UFri3k/E8jRH/u7ji0MO2L0zHxp3PFY=
+github.com/ditdotdev/remote-sdk-go v1.9.5 h1:jb5FN4U0VzdzYe4AGxaVCQQKlBVKEX00laqlmBywRiQ=
+github.com/ditdotdev/remote-sdk-go v1.9.5/go.mod h1:zyQQJgtOf6R5UFri3k/E8jRH/u7ji0MO2L0zHxp3PFY=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/fatih/color v1.19.0 h1:Zp3PiM21/9Ld6FzSKyL5c/BULoe/ONr9KlbYVOfG8+w=
 github.com/fatih/color v1.19.0/go.mod h1:zNk67I0ZUT1bEGsSGyCZYZNrHuTkJJB+r6Q9VuMi0LE=
