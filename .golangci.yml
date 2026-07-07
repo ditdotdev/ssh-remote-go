@@ -1,3 +1,6 @@
+# Copyright Dit 2026
+# SPDX-License-Identifier: BUSL-1.1
+
 # golangci-lint configuration for ssh-remote-go
 # Configuration compatible with golangci-lint v2.5.0
 version: "2"
