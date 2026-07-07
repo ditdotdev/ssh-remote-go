@@ -3,10 +3,6 @@
 
 //go:build integration
 
-/*
- * Copyright Dit.
- */
-
 // Package ssh integration tests exercise the real runCommand against a live
 // sshd. Unit-test runs (without the `integration` build tag) skip this file
 // entirely so they stay hermetic.
