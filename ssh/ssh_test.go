@@ -1,9 +1,13 @@
-/*
- * Copyright Dit.
- */
+// Copyright Dit 2026
+// SPDX-License-Identifier: BUSL-1.1
+
 package ssh
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"io"
 	"os"
@@ -12,6 +16,7 @@ import (
 
 	"github.com/ditdotdev/remote-sdk-go/remote"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -478,35 +483,15 @@ func TestGetConnPassword(t *testing.T) {
 }
 
 func TestGetConnKey(t *testing.T) {
-	//nolint:gosec // Test RSA private key
-	key := `
------BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAsXU8SiL4eLBupbLEF9XAy+60Dr5+TPSUm8c27WCUfYOF5Yly
-DWZcTS86coEGjgfqDFM6o3wXgadugt/XYi7M2k0QVsmX1577088/SixrNnX8HQyX
-f3S4tLGDLX/d48A2Xi6FmJUpHqyPzKzVU1THQPOKoxZUV4qZmbRrR0FO8WmZMQTl
-KNNopq4fvEPZw0oNPONS8e28zvCu0qqka06+mB5pIc5+OhXoQK4xPgPr/gW5Cruv
-R5IgBt4gdLMSpBp2JB3hFj6U0c+7wmGaZYt5R92/b8tetn/jMhIt7720mJJPfq1d
-1W1UpERZjUTMvFzNBLdCtgT59qxqL+Tv4QA6AQIDAQABAoIBAE7EvQgjUaswlUyT
-dxslVDixMddBkwpRng0vdiATuJWl5a8nPSrZfqr8BbOBtgkhVjA2WVbr4/s2+IS7
-Gv2HzIIxpsj/HpklBp7T5UHlSYmZAVlbl3uJsdry2Ek/8pv/W6Kef8pkmyX0brfp
-F5+vh+o6sBUH+lQJP3jMbrnoMURSX9jFSPg/+J1zb1Nf/SulBro4+Pb4t+i97FUk
-mWqMI1jvCkAnQJ0oYQ9CeYBJjvXeENyN7HQ+RM6OEdsHi64EMfJCwrZGMAHIo2Ty
-87AQhgoHEKfNC+XotnkPaKmS5qaP2ggPe2Ol63k3FbR6VHlqJny0VR48pbzyQyr2
-feENXWECgYEA2naSDRVCwiAdZAIvMa0cDjpwOYIfLJelc0hljCOaLQeye2oT+hAQ
-pCVO7+maD4VbZ1Xmc70LGFSWktVlByJU9UOBY5rq7DTgXoEMoOtf2uUcJupnLLix
-we7Fn9TFaM3RWKbbg3G0OjucepB7yVZ2qSVDGPQ8Bl/IKq2hfKsqy3UCgYEAz/L9
-PU0gzxmZlF1rea1d3clNoounW/J1qHXl2nT11RaIzPhct1fKde/wIt/D7gqwI3ba
-wBJhNv/a4kDvnJwV3iyEKFs7qqeqaZ1KsLCkaQ0erdhl8LzfE25MWKlTthqjY9yT
-f8ohD0r57y8NVInwfXhBKIUZr3qXBA+d0krfft0CgYACgbnLTKMndxbfPucrusDH
-qQQApO2WpWbQm9QOd5odSilSITV5eRW3zHXLavLJms4hsWqjiVfHP7E6nhg6rLos
-1kl1yyFG9JRegTyT3B+Nc3OPPsFQUg44G3VJEDfzq+jrC38ZUwSuZmC1R1MkTEmw
-Ry0t7B+EMzUoyDVCKPSkwQKBgQC+roMWdiYSodfZWzyVK6r6F4AP/90sDA1ltw5Z
-HozZo7s3sLpcCK2HLchWQjfIjJZtPqxiGbh5FW3hsEfHpLzMqKda1iXFW8+A3xHB
-KYjpJ3WtVdRMRvSLPcXWOxae0phmlrnOIUvlWQwMDmo7zezvMJkXDc26wj++Io/G
-aI++JQKBgQDYBW6xXOYHFbCazz7euPRXaV0BX9Pt+ylrQvqDWwa6fk9FDGOrhRW8
-1ywiam3Z+Nup2JNE8PjwP0qQisLbzAbG60HMg2Yx0C6yclIZLUDEwmrjmBVCiP81
-qXdXtd+SfLRrfCd1KJRp8NFIPFsk0T3iy8hxZJZSHtM6/nwM3p2rHw==
------END RSA PRIVATE KEY-----`
+	// Generate a throwaway RSA key at runtime rather than embedding key
+	// material in the source: even test-only keys trip secret scanners in
+	// a public repository.
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	key := string(pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(rsaKey),
+	}))
 	host := ""
 
 	var config *ssh.ClientConfig
@@ -519,7 +504,7 @@ qXdXtd+SfLRrfCd1KJRp8NFIPFsk0T3iy8hxZJZSHtM6/nwM3p2rHw==
 		return nil, nil
 	}
 
-	_, err := c.getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
+	_, err = c.getConnection(map[string]interface{}{propUsername: propUsername, propAddress: propAddress},
 		map[string]interface{}{propKey: key})
 	if assert.NoError(t, err) {
 		assert.Equal(t, propAddress, host)

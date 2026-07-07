@@ -1,8 +1,7 @@
-//go:build integration
+// Copyright Dit 2026
+// SPDX-License-Identifier: BUSL-1.1
 
-/*
- * Copyright Dit.
- */
+//go:build integration
 
 // Package ssh integration tests exercise the real runCommand against a live
 // sshd. Unit-test runs (without the `integration` build tag) skip this file

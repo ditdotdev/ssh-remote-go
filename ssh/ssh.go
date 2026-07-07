@@ -1,6 +1,5 @@
-/*
- * Copyright Dit.
- */
+// Copyright Dit 2026
+// SPDX-License-Identifier: BUSL-1.1
 
 // Package ssh provides SSH remote backend functionality for Dit data storage.
 package ssh
