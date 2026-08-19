@@ -138,6 +138,7 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
+          check-latest: true
           cache: true
 
       - name: Configure Git for private modules (Unix)
