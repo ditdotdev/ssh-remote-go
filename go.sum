@@ -2,8 +2,8 @@ github.com/bufbuild/protocompile v0.14.1 h1:iA73zAf/fyljNjQKwYzUHD6AD4R8KMasmwa/
 github.com/bufbuild/protocompile v0.14.1/go.mod h1:ppVdAIhbr2H8asPk6k4pY7t9zB1OU5DoEw9xY/FUi1c=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/ditdotdev/remote-sdk-go v1.10.3 h1:8wduEaWFzf4hQTlXenVhLxrANqQ3JmxGiunOLKegrtM=
-github.com/ditdotdev/remote-sdk-go v1.10.3/go.mod h1:F1z0s1L/iZjO4tKdYdU9rBxlA2JOj33DcV97kg/oLMo=
+github.com/ditdotdev/remote-sdk-go v1.10.4 h1:251jvIwbzwQoCX+tksfRA2fMCAnybvgXvGNsEVYs95M=
+github.com/ditdotdev/remote-sdk-go v1.10.4/go.mod h1:F1z0s1L/iZjO4tKdYdU9rBxlA2JOj33DcV97kg/oLMo=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/fatih/color v1.19.0 h1:Zp3PiM21/9Ld6FzSKyL5c/BULoe/ONr9KlbYVOfG8+w=
 github.com/fatih/color v1.19.0/go.mod h1:zNk67I0ZUT1bEGsSGyCZYZNrHuTkJJB+r6Q9VuMi0LE=
